@@ -38,7 +38,7 @@ import PaymentScreen from "./screens/Payments/PaymentScreen";
 import AddPayment from "./screens/Payments/AddPayment";
 
 // Bank
-import TalhaBankPayments from "./screens/Talha/index.jsx"; // ✅ import Talha page
+import TalhaBankPayments from "./screens/talha/index.jsx"; // ✅ import Talha page
 
 import SrBankPayments from "./screens/SR/index.jsx";
 
