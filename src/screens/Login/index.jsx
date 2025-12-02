@@ -26,14 +26,14 @@ const LoginScreen = () => {
         }
     }, [navigate, redirect, userInfo]);
 
+    const hardcodedUser = {
+        email: "admin@example.com",
+        password: "123456",
+        name: "Admin User",
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
-
-        const hardcodedUser = {
-            email: "admin@example.com",
-            password: "123456",
-            name: "Admin User",
-        };
 
         if (email === hardcodedUser.email && password === hardcodedUser.password) {
             dispatch(setCredentials({ userInfo: hardcodedUser }));
@@ -48,6 +48,12 @@ const LoginScreen = () => {
         } catch (error) {
             toast.error(error?.data?.message || "Login failed");
         }
+    };
+
+    // 🔥 Auto Copy to Clipboard
+    const copyToClipboard = (text) => {
+        navigator.clipboard.writeText(text);
+        toast.success("Copied to clipboard!", { autoClose: 800 });
     };
 
     return (
@@ -84,7 +90,8 @@ const LoginScreen = () => {
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 placeholder="Enter your email"
-                                className="w-full rounded-lg bg-white/20 border border-white/30 py-2.5 pl-10 pr-3 text-gray-100 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all text-sm sm:text-base"
+                                onClick={() => copyToClipboard(hardcodedUser.email)}
+                                className="w-full rounded-lg bg-white/20 border border-white/30 py-2.5 pl-10 pr-3 text-gray-100 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all text-sm sm:text-base cursor-pointer"
                             />
                         </div>
                     </div>
@@ -106,7 +113,8 @@ const LoginScreen = () => {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 placeholder="Enter your password"
-                                className="w-full rounded-lg bg-white/20 border border-white/30 py-2.5 pl-10 pr-3 text-gray-100 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all text-sm sm:text-base"
+                                onClick={() => copyToClipboard(hardcodedUser.password)}
+                                className="w-full rounded-lg bg-white/20 border border-white/30 py-2.5 pl-10 pr-3 text-gray-100 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all text-sm sm:text-base cursor-pointer"
                             />
                         </div>
                     </div>
@@ -123,9 +131,13 @@ const LoginScreen = () => {
 
                 {/* Footer */}
                 <div className="text-center mt-6 text-xs sm:text-sm text-gray-400">
-                    <p>
-                        Use <span className="text-indigo-300">admin@example.com</span> /{" "}
-                        <span className="text-indigo-300">123456</span>
+                    <p className="cursor-pointer"
+                       onClick={() => {
+                           copyToClipboard(`${hardcodedUser.email} / ${hardcodedUser.password}`);
+                       }}>
+                        Use <span className="text-indigo-300">{hardcodedUser.email}</span> /{" "}
+                        <span className="text-indigo-300">{hardcodedUser.password}</span>
+                        <br />
                     </p>
                 </div>
             </div>

@@ -229,6 +229,7 @@ const AddPurchase = () => {
             <label className="text-sm font-medium">Price (₹)</label>
             <Input
               type="number"
+              step="0.01"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
               placeholder="Auto-fill from product"
