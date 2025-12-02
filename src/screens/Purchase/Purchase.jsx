@@ -3,12 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Plus, Edit2, Trash2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from "../../components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent } from "../../components/ui/card";
 import { db } from "../../firebase";
 import { ref, onValue, remove } from "firebase/database";
 
@@ -17,13 +12,20 @@ const Purchases = () => {
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // FETCH PURCHASES FROM FIREBASE
   useEffect(() => {
     const purchasesRef = ref(db, "purchases");
     const unsub = onValue(purchasesRef, (snap) => {
       const data = snap.val();
       if (data) {
-        const arr = Object.keys(data).map((key) => ({ id: key, ...data[key] }));
-        // sort by date desc (optional)
+        const arr = Object.keys(data).map((key) => ({
+          id: key,
+          ...data[key],
+          amount: data[key].total || 0, // amount = total
+          paid: 0, // no paid system yet
+        }));
+
+        // sort newest first
         arr.sort((a, b) => (a.date < b.date ? 1 : -1));
         setPurchases(arr);
       } else {
@@ -35,7 +37,7 @@ const Purchases = () => {
     return () => unsub();
   }, []);
 
-  // group by supplier
+  // Group by supplier
   const grouped = purchases.reduce((acc, p) => {
     const supplier = p.supplier || "—";
     if (!acc[supplier]) acc[supplier] = [];
@@ -43,7 +45,7 @@ const Purchases = () => {
     return acc;
   }, {});
 
-  // totals
+  // Total footer amounts
   const totals = purchases.reduce(
     (acc, p) => {
       acc.amount += Number(p.amount || 0);
@@ -52,13 +54,13 @@ const Purchases = () => {
     },
     { amount: 0, paid: 0 }
   );
+
   const totalPending = totals.amount - totals.paid;
 
   const handleDelete = async (id) => {
     if (!confirm("Delete this purchase? This action cannot be undone.")) return;
     try {
       await remove(ref(db, `purchases/${id}`));
-      // onValue will refresh list
     } catch (err) {
       console.error("Failed to delete purchase:", err);
       alert("Failed to delete. See console.");
@@ -67,6 +69,7 @@ const Purchases = () => {
 
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-1 sm:p-4 space-y-2 sm:space-y-4 overflow-hidden">
+      
       {/* HEADER */}
       <header className="flex items-center justify-between py-2 sm:py-3 border-b border-border/50">
         <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="h-8 w-8 p-0 sm:p-2 hover:bg-accent">
@@ -107,6 +110,7 @@ const Purchases = () => {
               <div className="text-center p-8 text-muted-foreground">No purchases found.</div>
             ) : (
               <div className="space-y-6">
+                
                 {Object.entries(grouped).map(([supplier, items]) => {
                   const supplierAmount = items.reduce((a, b) => a + Number(b.amount || 0), 0);
                   const supplierPaid = items.reduce((a, b) => a + Number(b.paid || 0), 0);
@@ -137,14 +141,16 @@ const Purchases = () => {
                             <th className="p-2 text-right">Actions</th>
                           </tr>
                         </thead>
+
                         <tbody>
                           {items.map((it) => {
                             const pending = Number(it.amount || 0) - Number(it.paid || 0);
+
                             return (
                               <tr key={it.id} className="border-t hover:bg-gray-50">
                                 <td className="p-2">{it.date || it.createdAt || "—"}</td>
-                                <td className="p-2">₹{Number(it.amount || 0).toLocaleString()}</td>
-                                <td className="p-2">₹{Number(it.paid || 0).toLocaleString()}</td>
+                                <td className="p-2">₹{Number(it.amount).toLocaleString()}</td>
+                                <td className="p-2">₹{Number(it.paid).toLocaleString()}</td>
                                 <td className="p-2">₹{pending.toLocaleString()}</td>
                                 <td className="p-2">{it.notes || "-"}</td>
                                 <td className="p-2 text-right">
@@ -163,6 +169,7 @@ const Purchases = () => {
                     </div>
                   );
                 })}
+
               </div>
             )}
           </CardContent>
