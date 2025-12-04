@@ -132,7 +132,7 @@ const router = createBrowserRouter([
           //JR Bank Payments
           { path: "/jr", element: <JrBankPayments /> },
 
-          { path: "/warehouse/:id", element: <WarehouseDetails />},
+          { path: "/warehouse", element: <WarehouseDetails />},
 
         ],
       },
