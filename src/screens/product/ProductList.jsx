@@ -34,6 +34,10 @@ const ProductList = () => {
     await remove(productRef);
   };
 
+  // Determine which dynamic columns exist
+  const showPieces = products.some((p) => p.piecesPerBox !== undefined);
+  const showCreated = products.some((p) => p.createdAt);
+
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
       
@@ -68,11 +72,8 @@ const ProductList = () => {
             <tr className="bg-gray-100 text-sm sm:text-base">
               <th className="border p-2 text-left">Name</th>
               <th className="border p-2 text-left">Category</th>
-              <th className="border p-2 text-left">Boxes</th>
-              <th className="border p-2 text-left">Pieces</th>
-              <th className="border p-2 text-left">Price / Piece (₹)</th>
-              <th className="border p-2 text-left">Total (₹)</th>
-              <th className="border p-2 text-left">Created On</th>
+              {showPieces && <th className="border p-2 text-left">Pieces/Box</th>}
+              {showCreated && <th className="border p-2 text-left">Created On</th>}
               <th className="border p-2 text-center">Action</th>
             </tr>
           </thead>
@@ -80,39 +81,44 @@ const ProductList = () => {
           <tbody>
             {products.length === 0 ? (
               <tr>
-                <td colSpan="8" className="text-center p-4">
+                <td colSpan={3 + (showPieces ? 1 : 0) + (showCreated ? 1 : 0)} className="text-center p-4">
                   No products added yet.
                 </td>
               </tr>
             ) : (
               products.map((prod) => {
-                const boxes = Number(prod.box || 0);
-                const pieces = Number(prod.pieces || 0);
-                const price = Number(prod.price || 0);
+                const rowCells = [
+                  <td key="name" className="border p-2">{prod.productName}</td>,
+                  <td key="category" className="border p-2">{prod.category}</td>
+                ];
 
-                const total = boxes * pieces * price;
+                if (showPieces) {
+                  rowCells.push(
+                    <td key="pieces" className="border p-2">{prod.piecesPerBox ?? "-"}</td>
+                  );
+                }
+                if (showCreated) {
+                  rowCells.push(
+                    <td key="created" className="border p-2">{prod.createdAt ?? "-"}</td>
+                  );
+                }
+
+                rowCells.push(
+                  <td key="action" className="border p-2 text-center">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => handleDelete(prod.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </td>
+                );
 
                 return (
                   <tr key={prod.id} className="hover:bg-gray-50 text-sm sm:text-base">
-                    <td className="border p-2">{prod.productName}</td>
-                    <td className="border p-2">{prod.category}</td>
-                    <td className="border p-2">{boxes}</td>
-                    <td className="border p-2">{pieces}</td>
-                    <td className="border p-2">₹{price}</td>
-                    <td className="border p-2 font-semibold">₹{total}</td>
-                    <td className="border p-2">{prod.createdAt}</td>
-
-                    {/* Delete Button */}
-                    <td className="border p-2 text-center">
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        className="h-8"
-                        onClick={() => handleDelete(prod.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </td>
+                    {rowCells}
                   </tr>
                 );
               })

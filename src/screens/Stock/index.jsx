@@ -27,7 +27,7 @@ const StockScreen = () => {
   const [stock, setStock] = useState([]);
 
   // ---------------------------------------------------------
-  // LOAD STOCKS FROM FIREBASE (supports date folders)
+  // LOAD STOCKS FROM FIREBASE
   // ---------------------------------------------------------
   useEffect(() => {
     const stockRef = ref(db, "stocks/");
@@ -42,7 +42,7 @@ const StockScreen = () => {
 
       let finalList = [];
 
-      // LOOP THROUGH ALL date-* folders
+      // LOOP THROUGH ALL date folders
       Object.entries(data).forEach(([dateKey, items]) => {
         Object.entries(items).forEach(([id, item]) => {
           finalList.push({
@@ -74,7 +74,6 @@ const StockScreen = () => {
 
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-1 sm:p-4 space-y-2 sm:space-y-4 overflow-hidden">
-      
       {/* Header */}
       <header className="flex items-center justify-between py-2 border-b border-border/50">
         <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
@@ -111,6 +110,7 @@ const StockScreen = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Sr No.</TableHead>
+                      <TableHead>Product Name</TableHead>
                       <TableHead>Category</TableHead>
                       <TableHead>Boxes</TableHead>
                       <TableHead>Pieces</TableHead>
@@ -129,6 +129,7 @@ const StockScreen = () => {
                       return (
                         <TableRow key={item._firebaseId}>
                           <TableCell>{index + 1}</TableCell>
+                          <TableCell>{item.productName || "-"}</TableCell>
                           <TableCell>{item.category}</TableCell>
                           <TableCell>{item.boxes}</TableCell>
                           <TableCell>{item.pieces}</TableCell>

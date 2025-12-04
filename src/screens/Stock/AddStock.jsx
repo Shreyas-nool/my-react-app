@@ -44,9 +44,9 @@ const AddStockScreen = () => {
   const [boxes, setBoxes] = useState("");
   const [pieces, setPieces] = useState("");
   const [pricePerPiece, setPricePerPiece] = useState("");
-  const [warehouse, setWarehouse] = useState("");
 
-  const warehouseList = ["Main Warehouse", "Godown 1", "Godown 2"];
+  const [warehouse, setWarehouse] = useState("");
+  const [warehouses, setWarehouses] = useState([]);  // ✅ dynamic warehouse list
 
   // FETCH PRODUCTS
   useEffect(() => {
@@ -61,6 +61,20 @@ const AddStockScreen = () => {
     });
   }, []);
 
+  // ✅ FETCH WAREHOUSES FROM DB
+  useEffect(() => {
+    const whRef = ref(db, "warehouse/");
+    onValue(whRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      const list = Object.keys(data).map((id) => ({
+        id,
+        name: data[id].name || "Unnamed",
+        createdAt: data[id].createdAt,
+      }));
+      setWarehouses(list);
+    });
+  }, []);
+
   const handleSelectProduct = (prod) => {
     setSelectedProduct(prod);
     setProductOpen(false);
@@ -69,14 +83,11 @@ const AddStockScreen = () => {
     setBoxes(prod.boxes || "");
     setPieces(prod.pieces || prod.piecesPerBox || "");
     setPricePerPiece(prod.pricePerPiece || prod.price || "");
-    setWarehouse(prod.warehouse || "");
   };
 
-  // -------------------------
-  // SAVE STOCK TO DATABASE
-  // -------------------------
+  // SAVE STOCK
   const handleSaveStock = async () => {
-    if (!selectedProduct || !boxes || !pieces || !pricePerPiece) {
+    if (!selectedProduct || !boxes || !pieces || !pricePerPiece || !warehouse) {
       return alert("Please fill all fields.");
     }
 
@@ -104,7 +115,7 @@ const AddStockScreen = () => {
       await set(newStock, stockEntry);
 
       alert("Stock saved successfully!");
-      navigate("/stocks");
+      navigate(-1);
     } catch (err) {
       console.error(err);
       alert("Error saving stock.");
@@ -112,7 +123,7 @@ const AddStockScreen = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-6 mt-10 space-y-6 overflow-y-scroll"
+    <div className="max-w-6xl mx-auto p-4 sm:p-6 mt-6 sm:mt-10 space-y-6 overflow-y-scroll"
       style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
     >
       {/* Hide Scrollbar for Chrome */}
@@ -127,23 +138,21 @@ const AddStockScreen = () => {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => navigate("/stocks")}
+          onClick={() => navigate(-1)}
           className="h-8 w-8 p-0 hover:bg-accent"
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
 
-        <div className="flex-1 text-center">
-          <h1 className="text-lg sm:text-xl font-semibold text-foreground/90">
-            Add Stock
-          </h1>
-        </div>
+        <h1 className="text-lg sm:text-xl font-semibold text-foreground/90">
+          Add Stock
+        </h1>
 
         <div className="w-8" />
       </header>
 
       {/* MAIN CARD */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border max-w-xl mx-auto">
+      <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border max-w-xl mx-auto">
         <CardHeader className="pb-4">
           <CardTitle className="text-lg font-semibold">
             New Stock Entry
@@ -232,7 +241,7 @@ const AddStockScreen = () => {
             />
           </div>
 
-          {/* WAREHOUSE */}
+          {/* WAREHOUSE DROPDOWN — NOW DYNAMIC */}
           <div className="space-y-1">
             <Label>Warehouse</Label>
             <select
@@ -241,8 +250,11 @@ const AddStockScreen = () => {
               className="border w-full h-10 rounded-md px-3"
             >
               <option value="">Select Warehouse</option>
-              {warehouseList.map((wh, i) => (
-                <option key={i} value={wh}>{wh}</option>
+
+              {warehouses.map((wh) => (
+                <option key={wh.id} value={wh.name}>
+                  {wh.name}
+                </option>
               ))}
             </select>
           </div>

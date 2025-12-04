@@ -2,42 +2,31 @@ import React, { useState, useEffect } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Textarea } from "../../components/ui/textarea";
-import { ArrowLeft, ChevronsUpDown } from "lucide-react";
+import { ArrowLeft, ChevronsUpDown, Check } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "../../components/ui/popover";
-import {
-  Command,
-  CommandInput,
-  CommandList,
-  CommandEmpty,
-  CommandItem,
-} from "../../components/ui/command";
+import { Popover, PopoverTrigger, PopoverContent } from "../../components/ui/popover";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandItem } from "../../components/ui/command";
 
 import { db } from "../../firebase";
 import { ref, onValue, push, set } from "firebase/database";
+import { cn } from "../../lib/utils";
 
 const AddPurchase = () => {
   const navigate = useNavigate();
 
   const [parties, setParties] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [stocks, setStocks] = useState([]);
 
   const [supplier, setSupplier] = useState("");
   const [date, setDate] = useState(new Date());
   const [items, setItems] = useState([]);
 
-  const [productName, setProductName] = useState("");
-  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedStock, setSelectedStock] = useState(null);
   const [productOpen, setProductOpen] = useState(false);
 
   const [quantity, setQuantity] = useState("");
   const [price, setPrice] = useState("");
-
   const [subtotal, setSubtotal] = useState(0);
   const [notes, setNotes] = useState("");
 
@@ -50,31 +39,48 @@ const AddPurchase = () => {
     });
   }, []);
 
-  // LOAD PRODUCTS
+  // LOAD STOCKS
   useEffect(() => {
-    const productRef = ref(db, "products");
-    onValue(productRef, (snapshot) => {
+    const stocksRef = ref(db, "stocks");
+    onValue(stocksRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        setProducts(
-          Object.keys(data).map((id) => ({
-            id,
-            ...data[id],
-          }))
-        );
+        // Flatten stock items from all dates
+        const stockItems = [];
+        Object.values(data).forEach((dateGroup) => {
+          Object.values(dateGroup).forEach((stock) => {
+            stockItems.push(stock);
+          });
+        });
+        setStocks(stockItems);
       }
     });
   }, []);
 
-  // Add Item
+  // SELECT STOCK ITEM
+  const handleSelectStock = (stock) => {
+    setSelectedStock(stock);
+    setQuantity(1); // default quantity 1
+    setPrice(stock.pricePerPiece || 0); // autofill price from stock
+    setProductOpen(false);
+  };
+
+  // ADD ITEM TO PURCHASE
   const handleAddItem = () => {
-    if (!productName || !quantity || !price)
-      return alert("Please fill all fields.");
+    if (!selectedStock || !quantity || !price) {
+      return alert("Please select a stock item and fill quantity.");
+    }
+
+    if (quantity > selectedStock.totalPieces) {
+      return alert("Quantity exceeds available stock!");
+    }
 
     const total = Number(quantity) * Number(price);
 
     const newItem = {
-      productName,
+      productName: selectedStock.productName,
+      category: selectedStock.category,
+      stockId: selectedStock.id,
       quantity: Number(quantity),
       price: Number(price),
       total,
@@ -83,18 +89,18 @@ const AddPurchase = () => {
     setItems([...items, newItem]);
     setSubtotal((prev) => prev + total);
 
-    setSelectedProduct(null);
-    setProductName("");
+    // Reset selection
+    setSelectedStock(null);
     setQuantity("");
     setPrice("");
   };
 
-  // Save Purchase
+  // SAVE PURCHASE
   const handleSavePurchase = async () => {
     if (!supplier) return alert("Please select a supplier.");
     if (items.length === 0) return alert("Add at least one item.");
 
-    const isoDate = new Date(date).toISOString().split("T")[0];
+    const isoDate = date.toISOString().split("T")[0];
 
     const purchaseData = {
       supplier,
@@ -172,40 +178,31 @@ const AddPurchase = () => {
         </div>
 
         {/* PRODUCT FIELDS */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-          {/* PRODUCT DROPDOWN (UI unchanged in layout, enhanced functionality) */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-4">
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium">Product</label>
 
             <Popover open={productOpen} onOpenChange={setProductOpen}>
               <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-between px-3"
-                >
-                  {productName || "Select Product"}
+                <Button variant="outline" className="w-full justify-between px-3">
+                  {selectedStock?.productName || "Select Stock Item"}
                   <ChevronsUpDown className="h-4 w-4 opacity-50" />
                 </Button>
               </PopoverTrigger>
 
               <PopoverContent className="p-0 w-[250px]">
                 <Command>
-                  <CommandInput placeholder="Search product..." />
+                  <CommandInput placeholder="Search stock..." />
                   <CommandList>
-                    <CommandEmpty>No product found.</CommandEmpty>
-
-                    {products.map((p) => (
+                    <CommandEmpty>No stock found.</CommandEmpty>
+                    {stocks.map((s) => (
                       <CommandItem
-                        key={p.id}
-                        value={p.productName}
-                        onSelect={() => {
-                          setSelectedProduct(p);
-                          setProductName(p.productName);
-                          setPrice(p.price);
-                          setProductOpen(false);
-                        }}
+                        key={s.id}
+                        value={s.productName}
+                        onSelect={() => handleSelectStock(s)}
                       >
-                        {p.productName}
+                        <Check className={cn("mr-2 h-4 w-4", selectedStock?.id === s.id ? "opacity-100" : "opacity-0")} />
+                        {s.productName}
                       </CommandItem>
                     ))}
                   </CommandList>
@@ -214,7 +211,6 @@ const AddPurchase = () => {
             </Popover>
           </div>
 
-          {/* QUANTITY */}
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium">Quantity</label>
             <Input
@@ -224,16 +220,9 @@ const AddPurchase = () => {
             />
           </div>
 
-          {/* PRICE */}
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium">Price (₹)</label>
-            <Input
-              type="number"
-              step="0.01"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder="Auto-fill from product"
-            />
+            <Input type="number" value={price} readOnly className="bg-slate-100" />
           </div>
 
           <div className="flex flex-col justify-end">
@@ -244,12 +233,13 @@ const AddPurchase = () => {
         </div>
       </div>
 
-      {/* TABLE */}
+      {/* ITEMS TABLE */}
       <div className="overflow-x-auto bg-white p-4 rounded-xl shadow-sm border">
         <table className="w-full border text-sm">
           <thead className="bg-gray-100">
             <tr>
               <th className="border p-2">Product</th>
+              <th className="border p-2">Category</th>
               <th className="border p-2">Quantity</th>
               <th className="border p-2">Price</th>
               <th className="border p-2">Total</th>
@@ -259,7 +249,7 @@ const AddPurchase = () => {
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td colSpan="4" className="text-center p-4">
+                <td colSpan="5" className="text-center p-4">
                   No items added.
                 </td>
               </tr>
@@ -267,19 +257,19 @@ const AddPurchase = () => {
               items.map((item, idx) => (
                 <tr key={idx}>
                   <td className="border p-2">{item.productName}</td>
+                  <td className="border p-2">{item.category}</td>
                   <td className="border p-2 text-center">{item.quantity}</td>
                   <td className="border p-2 text-right">₹{item.price}</td>
                   <td className="border p-2 text-right">₹{item.total}</td>
                 </tr>
               ))
             )}
-
             {items.length > 0 && (
               <tr className="bg-gray-100 font-semibold">
-                <td className="border p-2 text-right" colSpan="3">
+                <td colSpan="4" className="border p-2 text-right">
                   Subtotal
                 </td>
-                <td className="border p-2 text-right">₹{subtotal}</td>
+                <td className="border p-2 text-right">{subtotal}</td>
               </tr>
             )}
           </tbody>

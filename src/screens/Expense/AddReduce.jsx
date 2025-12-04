@@ -1,4 +1,4 @@
-import { ArrowLeft, Plus, Save } from "lucide-react";
+import { ArrowLeft, Save } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { useNavigate } from "react-router-dom";
 import {
@@ -18,84 +18,161 @@ import {
     SelectGroup,
 } from "@/components/ui/select";
 
+import { useEffect, useState } from "react";
+import { db } from "../../firebase";
+import { ref, onValue, push, set } from "firebase/database";
+
 const AddReduce = () => {
     const navigate = useNavigate();
+
+    const [amount, setAmount] = useState("");
+    const [expenseFor, setExpenseFor] = useState("");
+    const [selectedBank, setSelectedBank] = useState("");
+    const [banks, setBanks] = useState([]);
+
+    // ---------------------------
+    // FETCH BANK LIST FROM FIREBASE
+    // ---------------------------
+    useEffect(() => {
+        const bankRef = ref(db, "banks/");
+        onValue(bankRef, (snapshot) => {
+            const data = snapshot.val() || {};
+
+            const bankArray = Object.keys(data).map((id) => ({
+                id,
+                bankName: data[id].bankName,
+                accountDetails: data[id].accountDetails,
+            }));
+
+            setBanks(bankArray);
+        });
+    }, []);
+
+    // ---------------------------
+    // SAVE EXPENSE
+    // ---------------------------
+    const handleSaveExpense = async () => {
+        if (!amount || !expenseFor || !selectedBank) {
+            return alert("Please fill all fields");
+        }
+
+        const today = new Date();
+        const isoDate = today.toISOString().split("T")[0];
+
+        const expenseEntry = {
+            id: Date.now(),
+            amount: Number(amount),
+            expenseFor,
+            bank: selectedBank,
+            date: isoDate,
+            createdAt: new Date().toISOString(),
+        };
+
+        try {
+            const expRef = ref(db, "expenses/");
+            const newExp = push(expRef);
+            await set(newExp, expenseEntry);
+
+            alert("Expense saved");
+            navigate("/expense");
+        } catch (error) {
+            console.log(error);
+            alert("Error saving expense");
+        }
+    };
+
     return (
-        <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-1 sm:p-4 space-y-2 sm:space-y-4 overflow-hidden">
+        <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-4 space-y-4 overflow-hidden">
+
             {/* Header */}
-            <header className="flex items-center justify-between py-2 sm:py-3 border-b border-border/50">
+            <header className="flex items-center justify-between py-3 border-b border-border/50">
                 <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => navigate("/expense")} // Or back to dashboard/home
-                    className="h-8 w-8 sm:h-9 sm:w-9 p-0 sm:p-2 hover:bg-accent"
+                    onClick={() => navigate("/expense")}
+                    className="h-9 w-9 p-2 hover:bg-accent"
                 >
                     <ArrowLeft className="h-4 w-4" />
                 </Button>
+
                 <div className="flex-1 text-center">
-                    <h1 className="text-lg sm:text-xl font-semibold text-foreground/90">
+                    <h1 className="text-xl font-semibold text-foreground/90">
                         Expense
                     </h1>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="text-xs text-muted-foreground">
                         SR Enterprise
                     </p>
                 </div>
-                {/* <Button
-                    onClick={() => navigate("/party/add-party")}
-                    className="h-8 sm:h-9 text-sm font-medium bg-primary hover:bg-primary/90"
-                >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add New Party
-                </Button> */}
+
+                <div className="w-9" />
             </header>
 
+            {/* MAIN */}
             <main className="flex-1 overflow-y-auto">
                 <Card className="max-w-md mx-auto">
-                    <CardHeader className="space-y-1">
-                        <CardTitle className="text-base sm:text-lg font-semibold">
+                    <CardHeader>
+                        <CardTitle className="text-lg font-semibold">
                             Add Expense
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4 p-4 sm:p-6">
+
+                    <CardContent className="space-y-4 p-6">
                         <form className="space-y-4">
+
+                            {/* AMOUNT */}
                             <div className="space-y-2">
-                                <Label htmlFor="">Enter amount</Label>
+                                <Label>Enter Amount</Label>
                                 <Input
                                     type="number"
-                                    placeholder="enter amount"
-                                ></Input>
+                                    value={amount}
+                                    onChange={(e) => setAmount(e.target.value)}
+                                    placeholder="Enter amount"
+                                />
                             </div>
+
+                            {/* EXPENSE FOR */}
                             <div className="space-y-2">
-                                <Label htmlFor="">Expense Done for </Label>
+                                <Label>Expense Done For</Label>
                                 <Input
                                     type="text"
-                                    placeholder="enter expense done for"
-                                ></Input>
+                                    value={expenseFor}
+                                    onChange={(e) => setExpenseFor(e.target.value)}
+                                    placeholder="Purpose of expense"
+                                />
                             </div>
+
+                            {/* BANK SELECT (FROM FIREBASE) */}
                             <div className="space-y-2">
-                                <Label htmlFor="">Expense Done From</Label>
-                                <Select>
+                                <Label>Expense Done From</Label>
+                                <Select onValueChange={setSelectedBank}>
                                     <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="select payment method" />
+                                        <SelectValue placeholder="Select bank" />
                                     </SelectTrigger>
+
                                     <SelectContent>
                                         <SelectGroup>
-                                            <SelectItem value="jr">
-                                                JR
-                                            </SelectItem>
-                                            <SelectItem value="sr">
-                                                SR
-                                            </SelectItem>
-                                            <SelectItem value="banks">
-                                                Banks
-                                            </SelectItem>
+
+                                            {banks.map((bank) => (
+                                                <SelectItem
+                                                    key={bank.id}
+                                                    value={`${bank.bankName} - ${bank.accountDetails}`}
+                                                >
+                                                    {bank.bankName} — {bank.accountDetails}
+                                                </SelectItem>
+                                            ))}
+
                                         </SelectGroup>
                                     </SelectContent>
                                 </Select>
                             </div>
 
-                            <Button className="w-full h-10 sm:h-11 text-sm font-medium bg-primary hover:bg-primary/90">
-                                <Save /> Save Expense
+                            {/* SAVE BUTTON */}
+                            <Button
+                                type="button"
+                                onClick={handleSaveExpense}
+                                className="w-full h-11 bg-primary hover:bg-primary/90"
+                            >
+                                <Save className="mr-2 h-4 w-4" /> Save Expense
                             </Button>
                         </form>
                     </CardContent>

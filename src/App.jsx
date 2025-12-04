@@ -37,12 +37,16 @@ import EditPurchase from "./screens/Purchase/EditPurchase";
 import PaymentScreen from "./screens/Payments/PaymentScreen";
 import AddPayment from "./screens/Payments/AddPayment";
 
+import ViewInvoice from "./screens/Sales/ViewInvoice";
+
 // Bank
 import TalhaBankPayments from "./screens/talha/index.jsx"; // ✅ import Talha page
 
 import SrBankPayments from "./screens/SR/index.jsx";
 
 import JrBankPayments from "./screens/JR/index.jsx";
+
+import WarehouseDetails from "./screens/Warehouse/WarehouseDetails";
 
 
 // ✅ FULLY FIXED ROUTER
@@ -97,6 +101,7 @@ const router = createBrowserRouter([
           { path: "/sales/create-sales", element: <CreateSales /> },
           { path: "/sales/list", element: <SalesList /> },
           { path: "/sales/print-multiple", element: <PrintMultipleInvoices /> },
+          { path: "/sales/view-invoice", element: <ViewInvoice /> },
 
           // Payments
           { path: "/payment", element: <PaymentScreen /> },
@@ -126,6 +131,8 @@ const router = createBrowserRouter([
 
           //JR Bank Payments
           { path: "/jr", element: <JrBankPayments /> },
+
+          { path: "/warehouse/:id", element: <WarehouseDetails />},
 
         ],
       },

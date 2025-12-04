@@ -181,14 +181,14 @@ export default function AddPayment() {
 
             {/* Bank */}
             <div className="space-y-1">
-              <label className="text-sm font-medium">Bank</label>
+              <label className="text-sm font-medium">Method</label>
               <select
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                 value={bank}
                 onChange={(e) => setBank(e.target.value)}
                 required
               >
-                <option value="">Select bank</option>
+                <option value="">Select Method</option>
                 {banks.map((b) => (
                   <option
                     key={b.id}

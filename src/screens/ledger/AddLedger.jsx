@@ -15,37 +15,48 @@ export default function AddLedger() {
   const navigate = useNavigate();
 
   const [parties, setParties] = useState([]);
-  const [selectedParty, setSelectedParty] = useState("");
+  const [selectedParty, setSelectedParty] = useState(null);
   const [paidAmount, setPaidAmount] = useState("");
   const [note, setNote] = useState("");
 
   // Load party list from Firebase
   useEffect(() => {
     const partiesRef = ref(db, "parties");
+
     get(partiesRef).then((snapshot) => {
       if (snapshot.exists()) {
-        const data = Object.values(snapshot.val());
-        setParties(data);
+        const data = snapshot.val();
+
+        // Convert into array format with key
+        const list = Object.keys(data).map((key) => ({
+          key,
+          name: data[key].name,
+        }));
+
+        setParties(list);
       }
     });
   }, []);
 
+  // Save Ledger Entry
   const handleSave = async () => {
-    if (!selectedParty || !paidAmount) return alert("Fill all fields");
+    if (!selectedParty) return alert("Please select a party");
+    if (!paidAmount || Number(paidAmount) <= 0)
+      return alert("Enter a valid amount");
 
     const createdAt = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
     const ledgerRef = ref(db, `ledger/${createdAt}`);
 
     const newEntry = push(ledgerRef);
     await set(newEntry, {
-      partyId: selectedParty.id,
+      partyId: selectedParty.key,
       partyName: selectedParty.name,
       paidAmount: Number(paidAmount),
       note: note || "",
       createdAt,
     });
 
-    alert("Ledger entry added!");
+    alert("Ledger entry added successfully!");
     navigate("/ledger");
   };
 
@@ -74,19 +85,19 @@ export default function AddLedger() {
 
         <CardContent className="space-y-4">
 
-          {/* PARTY */}
+          {/* PARTY SELECT */}
           <div>
             <label className="text-sm font-medium">Select Party</label>
             <select
               className="w-full mt-1 p-2 border rounded-md"
               onChange={(e) => {
-                const party = parties.find((p) => p.id === e.target.value);
+                const party = parties.find((p) => p.key === e.target.value);
                 setSelectedParty(party);
               }}
             >
               <option value="">Select Party</option>
               {parties.map((p) => (
-                <option key={p.id} value={p.id}>
+                <option key={p.key} value={p.key}>
                   {p.name}
                 </option>
               ))}

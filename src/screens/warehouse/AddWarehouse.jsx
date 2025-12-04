@@ -1,4 +1,5 @@
-import { ArrowLeft, Plus, Save } from "lucide-react";
+// src/screens/Warehouse/AddWarehouse.jsx
+import { ArrowLeft, Save } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { useNavigate } from "react-router-dom";
 import {
@@ -10,58 +11,70 @@ import {
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 
+import { db } from "../../firebase";
+import { ref, push, set } from "firebase/database";
+import { useState } from "react";
+
 const AddWarehouse = () => {
     const navigate = useNavigate();
+    const [name, setName] = useState("");
+    const [loading, setLoading] = useState(false);
+
+    const saveWarehouse = async () => {
+        if (!name.trim()) return alert("Enter warehouse name");
+
+        setLoading(true);
+
+        const warehouseRef = ref(db, "warehouse");
+        const newRef = push(warehouseRef);
+
+        await set(newRef, {
+            name,
+            createdAt: new Date().toISOString(),
+        });
+
+        setLoading(false);
+        navigate("/warehouse");
+    };
+
     return (
-        <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-1 sm:p-4 space-y-2 sm:space-y-4 overflow-hidden">
-            {/* Header */}
-            <header className="flex items-center justify-between py-2 sm:py-3 border-b border-border/50">
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => navigate("/warehouse")} // Or back to dashboard/home
-                    className="h-8 w-8 sm:h-9 sm:w-9 p-0 sm:p-2 hover:bg-accent"
-                >
+        <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-4">
+            <header className="flex items-center justify-between py-3 border-b border-border/50">
+                <Button variant="ghost" size="sm" onClick={() => navigate("/warehouse")}>
                     <ArrowLeft className="h-4 w-4" />
                 </Button>
+
                 <div className="flex-1 text-center">
-                    <h1 className="text-lg sm:text-xl font-semibold text-foreground/90">
-                        Warehouse
-                    </h1>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                        SR Enterprise
-                    </p>
+                    <h1 className="text-xl font-semibold">Warehouse</h1>
+                    <p className="text-xs text-muted-foreground">SR Enterprise</p>
                 </div>
-                {/* <Button
-                    onClick={() => navigate("/party/add-party")}
-                    className="h-8 sm:h-9 text-sm font-medium bg-primary hover:bg-primary/90"
-                >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add New Party
-                </Button> */}
             </header>
 
             <main className="flex-1 overflow-y-auto">
-                <Card className="max-w-md mx-auto">
-                    <CardHeader className="space-y-1">
-                        <CardTitle className="text-base sm:text-lg font-semibold">
-                            Add New Warehouse
-                        </CardTitle>
+                <Card className="max-w-md mx-auto mt-6">
+                    <CardHeader>
+                        <CardTitle className="text-lg">Add New Warehouse</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4 p-4 sm:p-6">
-                        <form className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="">Warehouse Name</Label>
-                                <Input
-                                    type="text"
-                                    placeholder="enter party name"
-                                ></Input>
-                            </div>
 
-                            <Button className="w-full h-10 sm:h-11 text-sm font-medium bg-primary hover:bg-primary/90">
-                                <Save /> Save Warehouse
-                            </Button>
-                        </form>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label>Warehouse Name</Label>
+                            <Input
+                                type="text"
+                                placeholder="Enter warehouse name"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                            />
+                        </div>
+
+                        <Button
+                            onClick={saveWarehouse}
+                            disabled={loading}
+                            className="w-full h-11"
+                        >
+                            <Save className="mr-2" />
+                            {loading ? "Saving..." : "Save Warehouse"}
+                        </Button>
                     </CardContent>
                 </Card>
             </main>

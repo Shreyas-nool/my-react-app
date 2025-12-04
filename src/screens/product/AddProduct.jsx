@@ -32,10 +32,10 @@ const ProductEntry = () => {
   const [categories, setCategories] = useState([]);
   const [open, setOpen] = useState(false);
 
-  // DatePicker must use Date object
   const [createdAt, setCreatedAt] = useState(new Date());
-
   const [notes, setNotes] = useState("");
+
+  const [piecesPerBox, setPiecesPerBox] = useState(1); // New field
 
   const [showCatPopup, setShowCatPopup] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -43,7 +43,6 @@ const ProductEntry = () => {
   // Load categories
   useEffect(() => {
     const catRef = ref(db, "categories");
-
     onValue(catRef, (snapshot) => {
       const data = snapshot.val() || {};
       const list = Object.keys(data).map((id) => ({
@@ -69,7 +68,7 @@ const ProductEntry = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!productName || !categoryId) {
+    if (!productName || !categoryId || !piecesPerBox) {
       alert("Please fill all required fields");
       return;
     }
@@ -80,6 +79,7 @@ const ProductEntry = () => {
       categoryId,
       createdAt: createdAt.toISOString().slice(0, 10),
       notes,
+      piecesPerBox: Number(piecesPerBox), // Save pieces per box
     };
 
     try {
@@ -94,6 +94,7 @@ const ProductEntry = () => {
       setCategoryId("");
       setNotes("");
       setCreatedAt(new Date());
+      setPiecesPerBox(1);
     } catch (error) {
       console.error(error);
       alert("Something went wrong!");
@@ -123,7 +124,7 @@ const ProductEntry = () => {
         onSubmit={handleSubmit}
         className="space-y-4 bg-white p-6 rounded shadow"
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* PRODUCT NAME */}
           <div>
             <label className="text-sm font-medium">Product Name</label>
@@ -192,6 +193,19 @@ const ProductEntry = () => {
               </button>
             </div>
           </div>
+
+          {/* PIECES PER BOX */}
+          <div>
+            <label className="text-sm font-medium">Pieces/Box</label>
+            <input
+              type="number"
+              min="1"
+              value={piecesPerBox}
+              onChange={(e) => setPiecesPerBox(e.target.value)}
+              className="w-full border rounded p-2"
+              required
+            />
+          </div>
         </div>
 
         {/* DATE + NOTES */}
@@ -199,7 +213,6 @@ const ProductEntry = () => {
           {/* CREATED ON */}
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium">Created On</label>
-
             <DatePicker
               selected={createdAt}
               onChange={(d) => setCreatedAt(d)}
@@ -215,10 +228,7 @@ const ProductEntry = () => {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="w-full border p-2 rounded h-10 resize-none"
-              style={{
-                scrollbarWidth: "none",
-                msOverflowStyle: "none",
-              }}
+              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             />
           </div>
         </div>

@@ -92,7 +92,7 @@ export default function PaymentScreen() {
                       <th className="px-4 py-3">Date</th>
                       <th className="px-4 py-3">Party</th>
                       <th className="px-4 py-3">Amount (₹)</th>
-                      <th className="px-4 py-3">Bank</th>
+                      <th className="px-4 py-3">Method</th>
                     </tr>
                   </thead>
 
