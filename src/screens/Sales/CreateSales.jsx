@@ -246,7 +246,7 @@ const SalesInvoice = () => {
                 <CommandInput placeholder="Search product..." onValueChange={(val) => setSearchText(val)} />
                 <CommandList>
                   {searchText.length < 2 && <div className="p-2 text-sm text-red-500">Enter at least 2 characters to search.</div>}
-                  <CommandEmpty>No stock found.</CommandEmpty>
+                  <CommandEmpty>No product found.</CommandEmpty>
                   {searchText.length >= 2 &&
                     stocks
                       .filter((s) => s.productName.toLowerCase().includes(searchText.toLowerCase()))
