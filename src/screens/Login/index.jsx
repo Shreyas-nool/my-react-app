@@ -50,14 +50,23 @@ const LoginScreen = () => {
         }
     };
 
-    // 🔥 Auto Copy to Clipboard
+    // Auto Copy to Clipboard
     const copyToClipboard = (text) => {
         navigator.clipboard.writeText(text);
         toast.success("Copied to clipboard!", { autoClose: 800 });
     };
 
     return (
-        <section className="min-h-screen flex items-center justify-center bg-[url('/images/bg-img.png')] bg-cover bg-center relative px-4 sm:px-6">
+        <section className="min-h-screen flex items-center justify-center relative px-4 sm:px-6">
+            {/* Video Background */}
+            <video
+                autoPlay
+                loop
+                muted
+                className="absolute inset-0 w-full h-full object-cover"
+                src="https://sr.9825098250.shop/assets-design/sdkk_login.mp4"
+            />
+
             {/* Overlay */}
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
 
@@ -75,10 +84,7 @@ const LoginScreen = () => {
                 <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
                     {/* Email Field */}
                     <div>
-                        <label
-                            htmlFor="email"
-                            className="block text-sm font-medium text-gray-200 mb-1"
-                        >
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-200 mb-1">
                             Email
                         </label>
                         <div className="relative">
@@ -98,10 +104,7 @@ const LoginScreen = () => {
 
                     {/* Password Field */}
                     <div>
-                        <label
-                            htmlFor="password"
-                            className="block text-sm font-medium text-gray-200 mb-1"
-                        >
+                        <label htmlFor="password" className="block text-sm font-medium text-gray-200 mb-1">
                             Password
                         </label>
                         <div className="relative">
@@ -131,10 +134,12 @@ const LoginScreen = () => {
 
                 {/* Footer */}
                 <div className="text-center mt-6 text-xs sm:text-sm text-gray-400">
-                    <p className="cursor-pointer"
-                       onClick={() => {
-                           copyToClipboard(`${hardcodedUser.email} / ${hardcodedUser.password}`);
-                       }}>
+                    <p
+                        className="cursor-pointer"
+                        onClick={() => {
+                            copyToClipboard(`${hardcodedUser.email} / ${hardcodedUser.password}`);
+                        }}
+                    >
                         Use <span className="text-indigo-300">{hardcodedUser.email}</span> /{" "}
                         <span className="text-indigo-300">{hardcodedUser.password}</span>
                         <br />
