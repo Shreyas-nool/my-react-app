@@ -50,7 +50,6 @@ const LoginScreen = () => {
         }
     };
 
-    // Auto Copy to Clipboard
     const copyToClipboard = (text) => {
         navigator.clipboard.writeText(text);
         toast.success("Copied to clipboard!", { autoClose: 800 });
@@ -67,8 +66,8 @@ const LoginScreen = () => {
                 src="https://sr.9825098250.shop/assets-design/sdkk_login.mp4"
             />
 
-            {/* Overlay */}
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+            {/* Overlay with 30% blur */}
+            <div className="absolute inset-0 bg-black/30 backdrop-blur-sm"></div>
 
             {/* Login Card */}
             <div className="relative w-full max-w-md mx-auto bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl shadow-2xl p-6 sm:p-8 text-white">
