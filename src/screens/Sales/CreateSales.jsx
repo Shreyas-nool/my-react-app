@@ -237,13 +237,13 @@ const SalesInvoice = () => {
           <Popover open={productOpen} onOpenChange={setProductOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-full justify-between px-3">
-                {selectedStock ? selectedStock.productName : "Select Stock Item"}
+                {selectedStock ? selectedStock.productName : "Select Product"}
                 <ChevronsUpDown className="h-4 w-4 opacity-50" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="p-0 w-[260px]">
               <Command>
-                <CommandInput placeholder="Search stock..." onValueChange={(val) => setSearchText(val)} />
+                <CommandInput placeholder="Search product..." onValueChange={(val) => setSearchText(val)} />
                 <CommandList>
                   {searchText.length < 2 && <div className="p-2 text-sm text-red-500">Enter at least 2 characters to search.</div>}
                   <CommandEmpty>No stock found.</CommandEmpty>
