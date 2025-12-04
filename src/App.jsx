@@ -46,7 +46,7 @@ import SrBankPayments from "./screens/SR/index.jsx";
 
 import JrBankPayments from "./screens/JR/index.jsx";
 
-import WarehouseDetails from "./screens/warehouse/WarehouseDetails";
+import WarehouseDetails from "./screens/warehouse/WarehouseDetails.jsx";
 
 
 // ✅ FULLY FIXED ROUTER
