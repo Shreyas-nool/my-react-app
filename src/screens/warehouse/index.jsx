@@ -1,4 +1,4 @@
-// src/screens/Warehouse/index.jsx
+// src/screens/warehouse/index.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
