@@ -34,12 +34,15 @@ const PartyLedgerScreen = () => {
         Object.values(sales).forEach((sale) => {
           Object.values(sale).forEach((inv) => {
             if (inv.party === partyName) {
-              const total = inv.items?.reduce((sum, i) => sum + (i.total || 0), 0);
+              const total = inv.items?.reduce(
+                (sum, i) => sum + (i.total || 0),
+                0
+              );
               transactions.push({
                 type: "Sale",
                 date: inv.createdAt || inv.date,
                 invoice: inv.invoiceNumber || inv.invoice,
-                debit: total,
+                debit: total || 0,
                 credit: 0,
                 notes: "",
               });
@@ -72,12 +75,21 @@ const PartyLedgerScreen = () => {
         const payments = paymentsSnap.val() || {};
         Object.values(payments).forEach((payment) => {
           if (payment.party === partyName) {
+            let debit = 0;
+            let credit = 0;
+
+            if (payment.amount >= 0) {
+              debit = payment.amount; // money received from party
+            } else {
+              credit = -payment.amount; // money paid to party
+            }
+
             transactions.push({
               type: "Payment",
               date: payment.createdAt || payment.date,
-              invoice: payment.id,
-              debit: 0,
-              credit: payment.amount || 0,
+              invoice: payment.id || "",
+              debit,
+              credit,
               notes: payment.bank || "",
             });
           }
@@ -114,7 +126,6 @@ const PartyLedgerScreen = () => {
         // ledger/{partyId}/{today}/{autoId}
         // -----------------------------
         const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
-
         const ledgerPath = `ledger/${id}/${today}`;
         await remove(ref(db, ledgerPath)); // delete old data for the same day
 
@@ -133,10 +144,9 @@ const PartyLedgerScreen = () => {
         // -----------------------------
         const summaryPath = `ledgerSummary/${id}`;
         await remove(ref(db, summaryPath)); // remove old summary
-
         await set(ref(db, summaryPath), {
           partyId: id,
-          partyName: partyName,
+          partyName,
           date: today,
           openingBalance,
           totalDebit,
@@ -150,7 +160,6 @@ const PartyLedgerScreen = () => {
         await update(ref(db, `parties/${id}`), {
           balance: runningBalance,
         });
-
       } catch (err) {
         console.error("Error fetching/saving ledger:", err);
       } finally {
@@ -212,12 +221,18 @@ const PartyLedgerScreen = () => {
 
             {ledgerData.transactions.map((t, idx) => (
               <tr key={idx} className="hover:bg-slate-50">
-                <td className="p-2">{new Date(t.date).toLocaleDateString()}</td>
+                <td className="p-2">
+                  {new Date(t.date).toLocaleDateString()}
+                </td>
                 <td className="p-2 capitalize">{t.type}</td>
                 <td className="p-2">{t.invoice}</td>
                 <td className="p-2">{t.notes}</td>
-                <td className="p-2 text-right text-green-600">{t.debit || ""}</td>
-                <td className="p-2 text-right text-red-600">{t.credit || ""}</td>
+                <td className="p-2 text-right text-green-600">
+                  {t.debit || ""}
+                </td>
+                <td className="p-2 text-right text-red-600">
+                  {t.credit || ""}
+                </td>
                 <td
                   className={`p-2 text-right font-semibold ${
                     t.runningBalance > 0 ? "text-red-600" : "text-green-600"

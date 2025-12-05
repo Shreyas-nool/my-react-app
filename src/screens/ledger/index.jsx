@@ -24,49 +24,79 @@ import {
 
 export default function Ledger() {
   const navigate = useNavigate();
-  const [parties, setParties] = useState([]);
-  const [balances, setBalances] = useState({});
+  const [ledgerData, setLedgerData] = useState([]);
 
-  // Fetch parties
   useEffect(() => {
-    const partiesRef = ref(db, "parties");
-    const unsubscribe = onValue(partiesRef, (snapshot) => {
-      const data = snapshot.val() || {};
-      const partyList = Object.entries(data).map(([id, party]) => ({
-        id,
-        name: party.name || "Unknown",
-        opening: Number(party.openingBalance || 0),
+    const ledgerSummaryRef = ref(db, "ledgerSummary");
+    const ledgerRef = ref(db, "ledger");
+
+    // Listen to both ledgerSummary and ledger nodes
+    const unsubscribeSummary = onValue(ledgerSummaryRef, (snapshot) => {
+      const summaryData = snapshot.val() || {};
+
+      // Convert to array of party summaries
+      const summaryList = Object.values(summaryData).map((entry) => ({
+        partyId: entry.partyId,
+        partyName: entry.partyName,
+        openingBalance: Number(entry.openingBalance || 0),
+        balance: Number(entry.balance || 0),
+        totalDebit: Number(entry.totalDebit || 0),
+        totalCredit: Number(entry.totalCredit || 0),
+        date: entry.date,
       }));
-      setParties(partyList);
+
+      setLedgerData((prev) => mergeLedgerWithLatest(prev, summaryList));
     });
 
-    return () => unsubscribe();
-  }, []);
+    const unsubscribeLedger = onValue(ledgerRef, (snapshot) => {
+      const ledgerDataRaw = snapshot.val() || {};
+      const latestBalances = [];
 
-  // Fetch ledger balances in real-time
-  useEffect(() => {
-    if (!parties.length) return;
+      Object.entries(ledgerDataRaw).forEach(([partyId, datesObj]) => {
+        let latestDate = null;
+        let latestEntry = null;
 
-    const ledgerRef = ref(db, "ledger");
-    const unsubscribe = onValue(ledgerRef, (snap) => {
-      const ledgerData = snap.val() || {};
-      const newBalances = {};
-
-      parties.forEach((p) => {
-        const partyLedger = ledgerData[p.id] || {};
-        // Sum runningBalance if saved, or compute balance
-        let balance = 0;
-        Object.values(partyLedger).forEach((entry) => {
-          balance = entry.runningBalance ?? balance + (entry.debit || 0) - (entry.credit || 0);
+        Object.entries(datesObj).forEach(([date, entriesObj]) => {
+          Object.values(entriesObj).forEach((entry) => {
+            if (!latestDate || new Date(entry.createdAt) > new Date(latestDate)) {
+              latestDate = entry.createdAt || entry.date;
+              latestEntry = entry;
+            }
+          });
         });
-        newBalances[p.id] = balance;
+
+        if (latestEntry) {
+          latestBalances.push({
+            partyId: latestEntry.partyId,
+            partyName: latestEntry.partyName,
+            balance: latestEntry.runningBalance ?? 0,
+          });
+        }
       });
 
-      setBalances(newBalances);
+      setLedgerData((prev) => mergeLedgerWithLatest(prev, latestBalances));
     });
 
-    return () => unsubscribe();
-  }, [parties]);
+    return () => {
+      unsubscribeSummary();
+      unsubscribeLedger();
+    };
+  }, []);
+
+  // Merge summary and ledger latest balances
+  const mergeLedgerWithLatest = (prevData, newData) => {
+    const merged = {};
+
+    newData.forEach((entry) => {
+      merged[entry.partyId] = { ...merged[entry.partyId], ...entry };
+    });
+
+    prevData.forEach((entry) => {
+      merged[entry.partyId] = { ...entry, ...merged[entry.partyId] };
+    });
+
+    return Object.values(merged);
+  };
 
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-1 sm:p-4 space-y-4">
@@ -88,7 +118,7 @@ export default function Ledger() {
       <main className="flex-1 overflow-y-auto">
         <Card>
           <CardHeader>
-            <CardTitle>Party Ledger List</CardTitle>
+            <CardTitle>Party Ledger Summary</CardTitle>
           </CardHeader>
 
           <CardContent>
@@ -103,43 +133,37 @@ export default function Ledger() {
                 </TableHeader>
 
                 <TableBody>
-                  {parties.map((party) => {
-                    const balance = balances[party.id] ?? 0;
-                    return (
-                      <TableRow
-                        key={party.id}
-                        className="cursor-pointer hover:bg-gray-50"
-                        onClick={() =>
-                          navigate(`/ledger/${party.id}`, { state: { party } })
+                  {ledgerData.map((entry) => (
+                    <TableRow
+                      key={entry.partyId}
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() =>
+                        navigate(`/ledger/${entry.partyId}`, { state: { party: entry } })
+                      }
+                    >
+                      <TableCell>{entry.partyName}</TableCell>
+
+                      <TableCell
+                        className={
+                          entry.openingBalance > 0
+                            ? "text-red-600 font-semibold"
+                            : "text-green-600 font-semibold"
                         }
                       >
-                        {/* Party Name */}
-                        <TableCell>{party.name}</TableCell>
+                        {entry.openingBalance || 0}
+                      </TableCell>
 
-                        {/* Opening Balance */}
-                        <TableCell
-                          className={
-                            party.opening > 0
-                              ? "text-red-600 font-semibold"
-                              : "text-green-600 font-semibold"
-                          }
-                        >
-                          {party.opening}
-                        </TableCell>
-
-                        {/* Current Balance */}
-                        <TableCell
-                          className={
-                            balance >= 0
-                              ? "text-green-600 font-semibold"
-                              : "text-red-600 font-semibold"
-                          }
-                        >
-                          {balance}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                      <TableCell
+                        className={
+                          (entry.balance || 0) >= 0
+                            ? "text-green-600 font-semibold"
+                            : "text-red-600 font-semibold"
+                        }
+                      >
+                        {entry.balance || 0}
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </div>

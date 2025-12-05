@@ -1,17 +1,19 @@
+// src/screens/jr/AddReduceMoney.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
-import { ref, onValue, push, serverTimestamp } from "firebase/database";
+import { ref, push, onValue, serverTimestamp } from "firebase/database";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Textarea } from "../../components/ui/textarea";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import { toast } from "react-toastify";
 
 const JrAddReduceMoney = () => {
   const navigate = useNavigate();
 
   const [amount, setAmount] = useState("");
+  const [type, setType] = useState("add"); // "add" or "reduce"
   const [notes, setNotes] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [balance, setBalance] = useState(0);
@@ -21,9 +23,13 @@ const JrAddReduceMoney = () => {
   // Fetch JR balance
   useEffect(() => {
     const paymentsRef = ref(db, "payments");
-    onValue(paymentsRef, (snapshot) => {
+
+    const unsubscribe = onValue(paymentsRef, (snapshot) => {
       const data = snapshot.val();
-      if (!data) return;
+      if (!data) {
+        setBalance(0);
+        return;
+      }
 
       const jrPayments = Object.values(data).filter(
         (p) => p.bank && p.bank.trim().split(" ")[0] === CURRENT_BANK
@@ -35,31 +41,36 @@ const JrAddReduceMoney = () => {
       );
       setBalance(total);
     });
+
+    return () => unsubscribe();
   }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!amount || !date) {
-      toast.error("Please fill all required fields");
+
+    if (!amount || Number(amount) <= 0 || !date) {
+      toast.error("Please fill all required fields with valid values");
       return;
     }
 
-    const paymentData = {
-      bank: CURRENT_BANK,
-      amount: Number(amount),
-      notes,
+    const adjustedAmount = type === "reduce" ? -Number(amount) : Number(amount);
+
+    const newPayment = {
+      party: type === "add" ? "Added to JR" : "Reduced from JR",
       date,
+      bank: CURRENT_BANK,
+      amount: adjustedAmount,
+      notes,
       createdAt: serverTimestamp(),
     };
 
     try {
-      const paymentsRef = ref(db, "payments");
-      await push(paymentsRef, paymentData);
-      toast.success("Transaction recorded successfully");
-      navigate("/jr");
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to record transaction");
+      await push(ref(db, "payments"), newPayment);
+      toast.success("✅ Transaction recorded successfully");
+      navigate("/jr"); // go back to JR page
+    } catch (err) {
+      console.error(err);
+      toast.error("Error adding transaction");
     }
   };
 
@@ -87,8 +98,8 @@ const JrAddReduceMoney = () => {
 
       {/* Form */}
       <form
-        className="bg-white p-6 rounded-2xl shadow-md space-y-4 border border-gray-100"
         onSubmit={handleSubmit}
+        className="bg-white p-6 rounded-2xl shadow-md space-y-4 border border-gray-100"
       >
         {/* Date */}
         <div className="flex flex-col space-y-2">
@@ -102,15 +113,26 @@ const JrAddReduceMoney = () => {
 
         {/* Amount */}
         <div className="flex flex-col space-y-2">
-          <label className="text-sm font-medium text-gray-700">
-            Amount (use - for reduction)
-          </label>
+          <label className="text-sm font-medium text-gray-700">Amount</label>
           <Input
             type="number"
             placeholder="Enter amount"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
           />
+        </div>
+
+        {/* Type */}
+        <div className="flex flex-col space-y-2">
+          <label className="text-sm font-medium text-gray-700">Type</label>
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+            className="w-full border rounded p-2"
+          >
+            <option value="add">Add Money</option>
+            <option value="reduce">Reduce Money</option>
+          </select>
         </div>
 
         {/* Notes */}
@@ -123,13 +145,18 @@ const JrAddReduceMoney = () => {
           />
         </div>
 
-        {/* Submit Button */}
-        <Button
-          type="submit"
-          className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg"
-        >
-          Submit
-        </Button>
+        {/* Buttons */}
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => navigate("/jr")}>
+            Cancel
+          </Button>
+          <button
+            type="submit"
+            className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded hover:bg-gray-800"
+          >
+            <Plus className="h-4 w-4" /> Submit
+          </button>
+        </div>
       </form>
     </div>
   );

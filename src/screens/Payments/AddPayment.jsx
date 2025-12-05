@@ -8,7 +8,7 @@ import {
   CardTitle,
   CardContent,
 } from "../../components/ui/card";
-import { getDatabase, ref, get, push, set } from "firebase/database";
+import { getDatabase, ref, get, set } from "firebase/database";
 
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -71,35 +71,39 @@ export default function AddPayment() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!amount || parseFloat(amount) <= 0) {
-      return alert("Enter a valid amount greater than 0.");
+    if (!amount || parseFloat(amount) <= 0 || !party || !bank) {
+      return alert("Please fill all required fields.");
     }
 
     const formattedDate = date.toISOString().split("T")[0];
+    const numericAmount = parseFloat(amount);
 
-    const newPayment = {
+    // Payment going to the party, amount is negative for the bank
+    const paymentData = {
       date: formattedDate,
       party,
-      amount: parseFloat(amount),
+      amount: -numericAmount, // money leaves bank
       bank,
       createdAt: new Date().toISOString(),
     };
 
     try {
       const db = getDatabase();
+
+      // Construct key using party and bank names (replace spaces with underscores)
+      const key = `${party.replace(/\s+/g, "_")}_${bank.replace(/\s+/g, "_")}`;
+
       // Save in main payments node
-      const paymentRef = ref(db, "payments");
-      const newPaymentRef = push(paymentRef);
-      await set(newPaymentRef, newPayment);
+      const paymentRef = ref(db, `payments/${key}`);
+      await set(paymentRef, paymentData);
 
       // Also save under selected bank
       const bankObj = banks.find(
         (b) => `${b.bankName} - ${b.accountDetails}` === bank
       );
       if (bankObj) {
-        const bankPaymentRef = ref(db, `banks/${bankObj.id}/payments`);
-        const newBankPaymentRef = push(bankPaymentRef);
-        await set(newBankPaymentRef, newPayment);
+        const bankPaymentRef = ref(db, `banks/${bankObj.id}/payments/${key}`);
+        await set(bankPaymentRef, paymentData);
       }
 
       alert("Payment added successfully!");
@@ -130,9 +134,7 @@ export default function AddPayment() {
       {/* Card */}
       <Card className="mt-6 border border-border/40 shadow-sm">
         <CardHeader className="pb-1">
-          <CardTitle className="text-base font-semibold">
-            Payment Details
-          </CardTitle>
+          <CardTitle className="text-base font-semibold">Payment Details</CardTitle>
         </CardHeader>
 
         <CardContent>

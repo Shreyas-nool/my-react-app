@@ -2,18 +2,25 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
-import { ref, push, onValue, set } from "firebase/database";
+import { ref, push, onValue, serverTimestamp } from "firebase/database";
 import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { Textarea } from "../../components/ui/textarea";
 import { ArrowLeft, Plus } from "lucide-react";
+import { toast } from "react-toastify";
 
 const AddReduceMoney = () => {
   const navigate = useNavigate();
+
   const [amount, setAmount] = useState("");
   const [type, setType] = useState("add"); // "add" or "reduce"
   const [notes, setNotes] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [balance, setBalance] = useState(0);
 
-  // Fetch current balance from payments
+  const CURRENT_BANK = "Talha";
+
+  // Fetch Talha balance
   useEffect(() => {
     const paymentsRef = ref(db, "payments");
 
@@ -23,9 +30,11 @@ const AddReduceMoney = () => {
         setBalance(0);
         return;
       }
+
       const talhaPayments = Object.values(data).filter(
-        (p) => p.bank === "Talha - Online"
+        (p) => p.bank === CURRENT_BANK + " - Online"
       );
+
       const total = talhaPayments.reduce(
         (acc, curr) => acc + Number(curr.amount || 0),
         0
@@ -39,37 +48,36 @@ const AddReduceMoney = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!amount || Number(amount) <= 0) {
-      alert("Enter a valid amount");
+    if (!amount || Number(amount) <= 0 || !date) {
+      toast.error("Please fill all required fields with valid values");
       return;
     }
 
     const adjustedAmount = type === "reduce" ? -Number(amount) : Number(amount);
 
-    const newPaymentRef = ref(db, "payments");
     const newPayment = {
       party: type === "add" ? "Added to Talha" : "Reduced from Talha",
-      date: new Date().toISOString().split("T")[0],
-      bank: "Talha - Online",
+      date,
+      bank: CURRENT_BANK + " - Online",
       amount: adjustedAmount,
       notes,
-      createdAt: new Date().toISOString(),
+      createdAt: serverTimestamp(),
     };
 
     try {
-      await push(newPaymentRef, newPayment);
-      alert("✅ Transaction added");
+      await push(ref(db, "payments"), newPayment);
+      toast.success("✅ Transaction recorded successfully");
       navigate("/talha"); // go back to Talha page
     } catch (err) {
       console.error(err);
-      alert("Error adding transaction");
+      toast.error("Error adding transaction");
     }
   };
 
   return (
-    <div className="max-w-3xl mx-auto mt-10 p-4 sm:p-6 bg-white rounded-2xl shadow-sm border">
+    <div className="flex flex-col max-w-3xl mx-auto mt-10 p-4 space-y-6 bg-background">
       {/* Header */}
-      <header className="flex items-center gap-4 mb-6">
+      <header className="flex items-center gap-4">
         <Button
           variant="ghost"
           size="sm"
@@ -78,31 +86,45 @@ const AddReduceMoney = () => {
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-lg sm:text-xl font-semibold text-foreground/90">
+        <h1 className="text-lg font-semibold text-foreground/90">
           Add / Reduce Money
         </h1>
       </header>
 
       {/* Current Balance */}
-      <div className="mb-6 text-lg font-semibold">
+      <div className="bg-white p-4 rounded-2xl shadow-md border border-gray-100 text-gray-800 font-semibold text-lg">
         Current Balance: {balance.toLocaleString()}
       </div>
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Amount</label>
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="Enter amount"
-            className="w-full border rounded p-2"
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white p-6 rounded-2xl shadow-md space-y-4 border border-gray-100"
+      >
+        {/* Date */}
+        <div className="flex flex-col space-y-2">
+          <label className="text-sm font-medium text-gray-700">Date</label>
+          <Input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Type</label>
+        {/* Amount */}
+        <div className="flex flex-col space-y-2">
+          <label className="text-sm font-medium text-gray-700">Amount</label>
+          <Input
+            type="number"
+            placeholder="Enter amount"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+        </div>
+
+        {/* Type */}
+        <div className="flex flex-col space-y-2">
+          <label className="text-sm font-medium text-gray-700">Type</label>
           <select
             value={type}
             onChange={(e) => setType(e.target.value)}
@@ -113,17 +135,17 @@ const AddReduceMoney = () => {
           </select>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Notes</label>
-          <textarea
+        {/* Notes */}
+        <div className="flex flex-col space-y-2">
+          <label className="text-sm font-medium text-gray-700">Notes</label>
+          <Textarea
+            placeholder="Optional notes"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            className="w-full border rounded p-2"
-            rows={3}
-            placeholder="Optional notes"
           />
         </div>
 
+        {/* Buttons */}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => navigate("/talha")}>
             Cancel
