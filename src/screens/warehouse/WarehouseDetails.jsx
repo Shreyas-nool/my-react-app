@@ -114,9 +114,9 @@ const WarehouseStock = () => {
                       <TableCell>{s.category}</TableCell>
                       <TableCell>{s.boxes}</TableCell>
                       <TableCell>{s.pieces}</TableCell>
-                      <TableCell>₹{s.pricePerPiece}</TableCell>
+                      <TableCell>{s.pricePerPiece}</TableCell>
                       <TableCell>{s.totalPieces}</TableCell>
-                      <TableCell>₹{s.totalValue}</TableCell>
+                      <TableCell>{s.totalValue}</TableCell>
                       <TableCell>{s.date}</TableCell>
                     </TableRow>
                   ))}
@@ -147,7 +147,7 @@ const WarehouseStock = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="font-medium">Price/ Piece:</span>
-                      <span>₹{s.pricePerPiece}</span>
+                      <span>{s.pricePerPiece}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="font-medium">Total Pieces:</span>
@@ -155,7 +155,7 @@ const WarehouseStock = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="font-medium">Total Value:</span>
-                      <span>₹{s.totalValue}</span>
+                      <span>{s.totalValue}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="font-medium">Date:</span>

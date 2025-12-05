@@ -56,7 +56,7 @@ const HomeScreen = () => {
                             <span className="text-green-400 text-xl sm:text-2xl font-semibold">↓</span>
                             <span className="text-green-100 font-medium text-sm sm:text-lg">To Collect</span>
                         </div>
-                        <div className="font-bold text-white text-lg sm:text-xl">₹ 1,000</div>
+                        <div className="font-bold text-white text-lg sm:text-xl">1,000</div>
                     </div>
 
                     <div className="flex justify-between items-center bg-white/20 backdrop-blur-md rounded-xl shadow-lg p-4 sm:p-5 border border-red-300/20 transition hover:scale-[1.03] hover:bg-white/30 duration-300">
@@ -64,7 +64,7 @@ const HomeScreen = () => {
                             <span className="text-red-400 text-xl sm:text-2xl font-semibold">↑</span>
                             <span className="text-red-100 font-medium text-sm sm:text-lg">To Pay</span>
                         </div>
-                        <div className="font-bold text-white text-lg sm:text-xl">₹ 0</div>
+                        <div className="font-bold text-white text-lg sm:text-xl">0</div>
                     </div>
                 </div>
 

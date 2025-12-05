@@ -53,7 +53,7 @@ export default function EditPurchase() {
         notes,
         updatedAt: new Date().toISOString(),
       });
-      alert("✅ Updated");
+      alert("Updated");
       navigate("/purchase");
     } catch (err) {
       console.error("Update failed:", err);
@@ -65,7 +65,12 @@ export default function EditPurchase() {
     <div className="max-w-4xl mx-auto p-4 sm:p-6 mt-8">
       <header className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/purchase")} className="h-8 w-8 p-0 hover:bg-accent">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate("/purchase")}
+            className="h-8 w-8 p-0 hover:bg-accent"
+          >
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="text-lg font-semibold">Edit Purchase</h1>
@@ -73,38 +78,75 @@ export default function EditPurchase() {
       </header>
 
       <form onSubmit={handleSave} className="bg-white p-6 rounded shadow space-y-4">
+        
         <div>
           <label className="block text-sm font-medium mb-1">Supplier</label>
-          <input value={supplier} onChange={(e) => setSupplier(e.target.value)} className="w-full border rounded p-2" />
+          <input
+            value={supplier}
+            onChange={(e) => setSupplier(e.target.value)}
+            className="w-full border rounded p-2"
+          />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          
           <div>
             <label className="block text-sm font-medium mb-1">Date</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full border rounded p-2" />
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full border rounded p-2"
+            />
           </div>
+
           <div>
-            <label className="block text-sm font-medium mb-1">Amount (₹)</label>
-            <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full border rounded p-2" />
+            <label className="block text-sm font-medium mb-1">Amount</label>
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-full border rounded p-2"
+            />
           </div>
+
           <div>
-            <label className="block text-sm font-medium mb-1">Paid (₹)</label>
-            <input type="number" value={paid} onChange={(e) => setPaid(e.target.value)} className="w-full border rounded p-2" />
+            <label className="block text-sm font-medium mb-1">Paid</label>
+            <input
+              type="number"
+              value={paid}
+              onChange={(e) => setPaid(e.target.value)}
+              className="w-full border rounded p-2"
+            />
           </div>
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">Notes</label>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full border rounded p-2" rows={3} />
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className="w-full border rounded p-2"
+            rows={3}
+          />
         </div>
 
         <div className="flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">Pending: <span className="font-semibold">₹{pending.toLocaleString()}</span></div>
+          <div className="text-sm text-muted-foreground">
+            Pending: <span className="font-semibold">{pending.toLocaleString()}</span>
+          </div>
+
           <div className="flex gap-2">
-            <Button onClick={() => navigate("/purchase")} variant="ghost">Cancel</Button>
-            <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Save</button>
+            <Button onClick={() => navigate("/purchase")} variant="ghost">
+              Cancel
+            </Button>
+
+            <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
+              Save
+            </button>
           </div>
         </div>
+
       </form>
     </div>
   );

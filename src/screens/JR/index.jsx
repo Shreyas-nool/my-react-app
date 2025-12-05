@@ -4,13 +4,8 @@ import { db } from "../../firebase";
 import { ref, onValue } from "firebase/database";
 
 import { Button } from "../../components/ui/button";
-import { ArrowLeft } from "lucide-react";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from "../../components/ui/card";
+import { ArrowLeft, Plus, Repeat } from "lucide-react";
+
 import {
   Table,
   TableHeader,
@@ -23,27 +18,42 @@ import {
 const JrBankPayments = () => {
   const navigate = useNavigate();
   const [payments, setPayments] = useState([]);
+  const [balance, setBalance] = useState(0);
+
+  const CURRENT_BANK = "JR";
 
   useEffect(() => {
     const paymentsRef = ref(db, "payments");
+
     const unsubscribe = onValue(paymentsRef, (snapshot) => {
       const data = snapshot.val();
-      if (!data) return setPayments([]);
+      if (!data) {
+        setPayments([]);
+        setBalance(0);
+        return;
+      }
 
-      const allPayments = Object.entries(data)
-        .map(([id, payment]) => ({ id, ...payment }))
-        .filter((p) => p.bank.startsWith("JR")); // Filter for JR bank
+      // Filter payments for JR bank (using first word)
+      const jrPayments = Object.values(data).filter(
+        (p) => p.bank && p.bank.trim().split(" ")[0] === CURRENT_BANK
+      );
 
-      setPayments(allPayments);
+      setPayments(jrPayments);
+
+      // Calculate balance
+      const total = jrPayments.reduce(
+        (acc, curr) => acc + Number(curr.amount || 0),
+        0
+      );
+      setBalance(total);
     });
 
     return () => unsubscribe();
   }, []);
 
   return (
-    <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-1 sm:p-4 space-y-2 sm:space-y-4 overflow-hidden">
-      
-      {/* HEADER */}
+    <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-2 sm:p-4 space-y-4 overflow-hidden">
+      {/* Header */}
       <header className="flex items-center justify-between py-2 sm:py-3 border-b border-border/50">
         <Button
           variant="ghost"
@@ -55,58 +65,73 @@ const JrBankPayments = () => {
         </Button>
 
         <div className="flex-1 text-center">
-          <h1 className="text-lg sm:text-xl font-semibold text-foreground/90">
-            JR Bank Payments
-          </h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-foreground/90">JR</h1>
           <p className="text-xs text-muted-foreground mt-0.5">SR Enterprise</p>
         </div>
 
         <div className="w-8" />
       </header>
 
-      {/* TABLE */}
+      {/* Balance Card */}
+      <div className="flex justify-between items-center bg-white shadow-md rounded-2xl p-6 border border-gray-100">
+        <div className="text-2xl font-bold text-gray-800">Balance: {balance.toLocaleString()}</div>
+        <div className="flex gap-3">
+          <Button
+            className="flex items-center gap-2 bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg shadow"
+            onClick={() => navigate("/jr/add-reduce-money")}
+          >
+            <Plus className="h-4 w-4" /> Add/Reduce Money
+          </Button>
+
+          <Button
+            className="flex items-center gap-2 bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg shadow"
+            onClick={() => navigate("/jr/transfer-money")}
+          >
+            <Repeat className="h-4 w-4" /> Transfer Money
+          </Button>
+        </div>
+      </div>
+
+      {/* Payments Table */}
       <main className="flex-1 overflow-y-auto">
-        <Card className="max-w-7xl mx-auto">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-base sm:text-lg font-semibold">
-              Payment Records
-            </CardTitle>
-          </CardHeader>
+        {payments.length === 0 ? (
+          <div className="text-center text-muted-foreground py-8">
+            No payments found for JR bank.
+          </div>
+        ) : (
+          <div className="overflow-x-auto bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>#</TableHead>
+                  <TableHead>Party</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Bank</TableHead>
+                  <TableHead>Notes</TableHead>
+                </TableRow>
+              </TableHeader>
 
-          <CardContent className="space-y-4 p-4 sm:p-6">
-            {payments.length === 0 ? (
-              <div className="text-center text-muted-foreground py-8">
-                No payments found for JR bank.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Sr No.</TableHead>
-                      <TableHead>Party</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Bank</TableHead>
+              <TableBody>
+                {payments.map((p, index) => {
+                  const isNegative = p.amount.toString().startsWith("-");
+                  return (
+                    <TableRow key={index}>
+                      <TableCell>{index + 1}</TableCell>
+                      <TableCell>{p.party}</TableCell>
+                      <TableCell>{p.date}</TableCell>
+                      <TableCell className={isNegative ? "text-red-600 font-semibold" : "text-green-600 font-semibold"}>
+                        {Number(p.amount).toLocaleString()}
+                      </TableCell>
+                      <TableCell>{p.bank}</TableCell>
+                      <TableCell>{p.notes || "-"}</TableCell>
                     </TableRow>
-                  </TableHeader>
-
-                  <TableBody>
-                    {payments.map((p, index) => (
-                      <TableRow key={p.id}>
-                        <TableCell>{index + 1}</TableCell>
-                        <TableCell>{p.party}</TableCell>
-                        <TableCell>₹{p.amount}</TableCell>
-                        <TableCell>{p.date}</TableCell>
-                        <TableCell>{p.bank}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </main>
     </div>
   );

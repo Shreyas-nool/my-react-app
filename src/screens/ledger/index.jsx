@@ -1,257 +1,151 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ref, onValue } from "firebase/database";
+import { db } from "../../firebase";
 
-// Mock data for development or fallback
-const MOCK_LEDGER = {
-  partyId: "123",
-  partyName: "ABC Traders",
-  openingBalance: 5000,
-  currency: "INR",
-  transactions: [
-    {
-      id: "t1",
-      date: "2025-11-30T10:12:00.000Z",
-      kind: "sale",
-      invoiceNo: "INV-1001",
-      products: [{ name: "T-Shirt", qty: 10, rate: 250 }],
-      debit: 2500,
-      credit: 0,
-      notes: "Paid by bank transfer",
-    },
-    {
-      id: "t2",
-      date: "2025-12-01T15:00:00.000Z",
-      kind: "purchase",
-      invoiceNo: "INV-1002",
-      products: [{ name: "Jeans", qty: 5, rate: 500 }],
-      debit: 0,
-      credit: 2500,
-      notes: "",
-    },
-  ],
-};
+import { Button } from "../../components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
-export default function PartyLedger({ partyId = "abc123" }) {
-  const [data, setData] = useState(MOCK_LEDGER); // default to mock data
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [query, setQuery] = useState("");
-  const [showOnlyWithNotes, setShowOnlyWithNotes] = useState(false);
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "../../components/ui/card";
 
-  // Fetch ledger from API (if available)
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "../../components/ui/table";
+
+export default function Ledger() {
+  const navigate = useNavigate();
+  const [parties, setParties] = useState([]);
+  const [balances, setBalances] = useState({});
+
+  // Fetch parties
   useEffect(() => {
-    if (!partyId) return;
-
-    setLoading(true);
-    setError(null);
-
-    fetch(`/api/parties/${partyId}/ledger`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((json) => {
-        json.openingBalance = Number(json.openingBalance || 0);
-        json.currency = json.currency || "INR";
-        json.transactions = (json.transactions || []).map((t) => ({
-          id: t.id || `${t.kind}-${Math.random().toString(36).slice(2, 8)}`,
-          date: t.date,
-          kind: t.kind || "other",
-          invoiceNo: t.invoiceNo || "",
-          products: t.products || [],
-          debit: Number(t.debit || 0),
-          credit: Number(t.credit || 0),
-          notes: t.notes || "",
-        }));
-        json.transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
-        setData(json);
-      })
-      .catch((err) => {
-        console.error(err);
-        setError("Failed to load ledger. Using mock data.");
-        setData(MOCK_LEDGER);
-      })
-      .finally(() => setLoading(false));
-  }, [partyId]);
-
-  // Filtered transactions based on search and notes
-  const filtered = useMemo(() => {
-    if (!data) return [];
-    const q = query.trim().toLowerCase();
-    return data.transactions.filter((t) => {
-      if (showOnlyWithNotes && !t.notes) return false;
-      if (!q) return true;
-      if ((t.invoiceNo || "").toLowerCase().includes(q)) return true;
-      if ((t.notes || "").toLowerCase().includes(q)) return true;
-      if ((t.kind || "").toLowerCase().includes(q)) return true;
-      if (t.products.some((p) => (p.name || "").toLowerCase().includes(q))) return true;
-      return false;
+    const partiesRef = ref(db, "parties");
+    const unsubscribe = onValue(partiesRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      const partyList = Object.entries(data).map(([id, party]) => ({
+        id,
+        name: party.name || "Unknown",
+        opening: Number(party.openingBalance || 0),
+      }));
+      setParties(partyList);
     });
-  }, [data, query, showOnlyWithNotes]);
 
-  // Calculate running balance
-  const rowsWithBalance = useMemo(() => {
-    if (!data) return [];
-    let balance = Number(data.openingBalance || 0);
-    return filtered.map((t) => {
-      balance = balance + (t.debit || 0) - (t.credit || 0);
-      return { ...t, runningBalance: balance };
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch ledger balances in real-time
+  useEffect(() => {
+    if (!parties.length) return;
+
+    const ledgerRef = ref(db, "ledger");
+    const unsubscribe = onValue(ledgerRef, (snap) => {
+      const ledgerData = snap.val() || {};
+      const newBalances = {};
+
+      parties.forEach((p) => {
+        const partyLedger = ledgerData[p.id] || {};
+        // Sum runningBalance if saved, or compute balance
+        let balance = 0;
+        Object.values(partyLedger).forEach((entry) => {
+          balance = entry.runningBalance ?? balance + (entry.debit || 0) - (entry.credit || 0);
+        });
+        newBalances[p.id] = balance;
+      });
+
+      setBalances(newBalances);
     });
-  }, [data, filtered]);
 
-  // Export CSV
-  function exportCSV() {
-    if (!data) return;
-    const hdr = [
-      "Date",
-      "Type",
-      "Invoice No",
-      "Products",
-      "Debit",
-      "Credit",
-      "Notes",
-      `Running Balance (${data.currency})`,
-    ];
-    const lines = [hdr.join(",")];
-    let balance = Number(data.openingBalance || 0);
-    lines.push(["(opening)", "", "", "", "", "", "", balance].join(","));
-    for (const t of (data.transactions || [])) {
-      balance = balance + (t.debit || 0) - (t.credit || 0);
-      const products = (t.products || []).map((p) => `${p.name} x${p.qty || 1}`).join("; ");
-      const row = [
-        new Date(t.date).toLocaleString(),
-        t.kind,
-        t.invoiceNo || "",
-        `"${products}"`,
-        t.debit || 0,
-        t.credit || 0,
-        `"${(t.notes || "").replace(/\"/g, '""')}"`,
-        balance,
-      ];
-      lines.push(row.join(","));
-    }
-    const csv = lines.join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${data.partyId || "ledger"}-ledger.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }
-
-  if (!partyId) {
-    return (
-      <div className="p-4">
-        <div className="text-sm text-red-600">No partyId supplied to PartyLedger component.</div>
-      </div>
-    );
-  }
+    return () => unsubscribe();
+  }, [parties]);
 
   return (
-    <div className="p-4 max-w-full">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">
-        <div>
-          <h2 className="text-xl font-semibold">Ledger — {data?.partyName || partyId}</h2>
-          <div className="text-sm text-slate-500">
-            Opening balance: {data ? `${data.openingBalance} ${data.currency}` : "—"}
-          </div>
-          {error && <div className="text-red-600 text-sm mt-1">{error}</div>}
+    <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-1 sm:p-4 space-y-4">
+      {/* Header */}
+      <header className="flex items-center justify-between py-2 border-b">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+
+        <div className="flex-1 text-center">
+          <h1 className="text-lg sm:text-xl font-semibold">Ledger</h1>
+          <p className="text-xs text-muted-foreground">SR Enterprise</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <input
-            type="text"
-            placeholder="Search invoice / product / notes"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="border rounded px-2 py-1"
-          />
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={showOnlyWithNotes}
-              onChange={(e) => setShowOnlyWithNotes(e.target.checked)}
-            />
-            <span className="text-sm">Only with notes</span>
-          </label>
-          <button onClick={exportCSV} className="bg-slate-800 text-white px-3 py-1 rounded">
-            Export CSV
-          </button>
-        </div>
-      </div>
 
-      <div className="bg-white rounded shadow overflow-auto">
-        {loading && <div className="p-4">Loading...</div>}
-        {!loading && data && (
-          <table className="min-w-full text-sm divide-y">
-            <thead className="bg-slate-50 sticky top-0">
-              <tr>
-                <th className="p-2 text-left">Date</th>
-                <th className="p-2 text-left">Type</th>
-                <th className="p-2 text-left">Invoice</th>
-                <th className="p-2 text-left">Products / Details</th>
-                <th className="p-2 text-right">Debit ({data.currency})</th>
-                <th className="p-2 text-right">Credit ({data.currency})</th>
-                <th className="p-2 text-left">Notes</th>
-                <th className="p-2 text-right">Balance ({data.currency})</th>
-              </tr>
-            </thead>
+        <div className="w-10" /> {/* empty to balance */}
+      </header>
 
-            <tbody>
-              <tr className="bg-slate-100">
-                <td className="p-2">(opening)</td>
-                <td className="p-2">—</td>
-                <td className="p-2">—</td>
-                <td className="p-2">—</td>
-                <td className="p-2 text-right">—</td>
-                <td className="p-2 text-right">—</td>
-                <td className="p-2">—</td>
-                <td className="p-2 text-right">{data.openingBalance}</td>
-              </tr>
+      {/* Table */}
+      <main className="flex-1 overflow-y-auto">
+        <Card>
+          <CardHeader>
+            <CardTitle>Party Ledger List</CardTitle>
+          </CardHeader>
 
-              {rowsWithBalance.length > 0 ? (
-                rowsWithBalance.map((t) => (
-                  <tr key={t.id} className="hover:bg-slate-50">
-                    <td className="p-2 align-top">{new Date(t.date).toLocaleString()}</td>
-                    <td className="p-2 align-top capitalize">{t.kind}</td>
-                    <td className="p-2 align-top">{t.invoiceNo || "—"}</td>
-                    <td className="p-2 align-top whitespace-normal text-xs">
-                      {t.products.length ? (
-                        <div className="space-y-1">
-                          {t.products.map((p, idx) => (
-                            <div key={idx}>
-                              <strong className="mr-1">{p.name}</strong>
-                              <span className="text-slate-600">x{p.qty || 1}</span>
-                              {p.rate ? <span className="ml-2">@ {p.rate}</span> : null}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-slate-600">—</div>
-                      )}
-                    </td>
-                    <td className="p-2 text-right align-top">{t.debit || ""}</td>
-                    <td className="p-2 text-right align-top">{t.credit || ""}</td>
-                    <td className="p-2 align-top text-xs">{t.notes || ""}</td>
-                    <td className="p-2 text-right align-top">{t.runningBalance}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={8} className="p-4 text-center text-slate-500">
-                    No transactions found
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        )}
-      </div>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Party Name</TableHead>
+                    <TableHead>Opening Balance</TableHead>
+                    <TableHead>Balance</TableHead>
+                  </TableRow>
+                </TableHeader>
 
-      <div className="mt-4 text-xs text-slate-500">
-        Tip: the ledger shows all incoming/outgoing amounts in a single table.
-      </div>
+                <TableBody>
+                  {parties.map((party) => {
+                    const balance = balances[party.id] ?? 0;
+                    return (
+                      <TableRow
+                        key={party.id}
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() =>
+                          navigate(`/ledger/${party.id}`, { state: { party } })
+                        }
+                      >
+                        {/* Party Name */}
+                        <TableCell>{party.name}</TableCell>
+
+                        {/* Opening Balance */}
+                        <TableCell
+                          className={
+                            party.opening > 0
+                              ? "text-red-600 font-semibold"
+                              : "text-green-600 font-semibold"
+                          }
+                        >
+                          {party.opening}
+                        </TableCell>
+
+                        {/* Current Balance */}
+                        <TableCell
+                          className={
+                            balance >= 0
+                              ? "text-green-600 font-semibold"
+                              : "text-red-600 font-semibold"
+                          }
+                        >
+                          {balance}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </main>
     </div>
   );
 }

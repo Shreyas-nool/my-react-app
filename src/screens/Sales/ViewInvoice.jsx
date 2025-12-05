@@ -31,7 +31,7 @@ export default function ViewInvoice() {
     document.body.innerHTML = printContent;
     window.print();
     document.body.innerHTML = originalContent;
-    window.location.reload(); // reload to restore React app
+    window.location.reload();
   };
 
   return (
@@ -70,10 +70,22 @@ export default function ViewInvoice() {
             <p><strong>Invoice #:</strong> {sale.invoiceNumber}</p>
             <p><strong>Date:</strong> {sale.createdAt}</p>
           </div>
+
           <div>
             <p><strong>Party:</strong> {sale.party}</p>
-            {sale.address && <p><strong>Address:</strong> {sale.address}</p>}
-            {sale.contact && <p><strong>Contact:</strong> {sale.contact}</p>}
+
+            {sale.address && (
+              <p><strong>Address:</strong> {sale.address}</p>
+            )}
+
+            {sale.contact && (
+              <p><strong>Contact:</strong> {sale.contact}</p>
+            )}
+
+            {/* ✅ Credit Period added here */}
+            {sale.creditPeriod && (
+              <p><strong>Credit Period:</strong> {sale.creditPeriod} days</p>
+            )}
           </div>
         </section>
 

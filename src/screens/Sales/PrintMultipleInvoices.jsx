@@ -37,14 +37,14 @@ const PrintMultipleInvoices = () => {
                   <td className="border px-2 py-1">{item.productName}</td>
                   <td className="border px-2 py-1">{item.size}</td>
                   <td className="border px-2 py-1">{item.box}</td>
-                  <td className="border px-2 py-1">₹{item.total}</td>
+                  <td className="border px-2 py-1">{item.total}</td>
                 </tr>
               ))}
             </tbody>
           </table>
 
           <div className="text-right mt-4 font-semibold">
-            Total Amount: ₹{sale.items.reduce((sum, i) => sum + i.total, 0)}
+            Total Amount: {sale.items.reduce((sum, i) => sum + i.total, 0)}
           </div>
 
         </div>

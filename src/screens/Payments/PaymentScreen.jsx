@@ -19,7 +19,6 @@ export default function PaymentScreen() {
     const db = getDatabase();
     const paymentsRef = ref(db, "payments");
 
-    // Live listener → updates instantly when data changes
     const unsubscribe = onValue(paymentsRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
@@ -29,7 +28,6 @@ export default function PaymentScreen() {
           ...data[id],
         }));
 
-        // Sort by date (latest first)
         list.sort((a, b) => new Date(b.date) - new Date(a.date));
 
         setPayments(list);
@@ -91,7 +89,7 @@ export default function PaymentScreen() {
                       <th className="px-4 py-3">#</th>
                       <th className="px-4 py-3">Date</th>
                       <th className="px-4 py-3">Party</th>
-                      <th className="px-4 py-3">Amount (₹)</th>
+                      <th className="px-4 py-3">Amount</th>
                       <th className="px-4 py-3">Method</th>
                     </tr>
                   </thead>
@@ -102,7 +100,7 @@ export default function PaymentScreen() {
                         <td className="px-4 py-3">{index + 1}</td>
                         <td className="px-4 py-3">{p.date}</td>
                         <td className="px-4 py-3">{p.party}</td>
-                        <td className="px-4 py-3">₹{p.amount}</td>
+                        <td className="px-4 py-3">{p.amount}</td>
                         <td className="px-4 py-3">{p.bank}</td>
                       </tr>
                     ))}

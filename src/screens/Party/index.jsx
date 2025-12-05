@@ -124,7 +124,7 @@ const Party = () => {
 
                         <TableCell>{party.city || "-"}</TableCell>
 
-                        <TableCell>₹ {party.openingBalance || 0}</TableCell>
+                        <TableCell>{party.openingBalance || 0}</TableCell>
 
                         <TableCell>{party.partyType}</TableCell>
                       </TableRow>

@@ -80,9 +80,9 @@ const Purchases = () => {
 
         {/* Desktop totals */}
         <div className="hidden sm:block text-right mr-3">
-          <div className="text-xs">Total: ₹{totals.amount.toLocaleString()}</div>
-          <div className="text-xs">Paid: ₹{totals.paid.toLocaleString()}</div>
-          <div className="text-xs text-red-600">Pending: ₹{totalPending.toLocaleString()}</div>
+          <div className="text-xs">Total: {totals.amount.toLocaleString()}</div>
+          <div className="text-xs">Paid: {totals.paid.toLocaleString()}</div>
+          <div className="text-xs text-red-600">Pending: {totalPending.toLocaleString()}</div>
         </div>
 
         {/* Add Button */}
@@ -97,9 +97,9 @@ const Purchases = () => {
 
       {/* Mobile Totals */}
       <div className="sm:hidden grid grid-cols-3 text-center text-xs bg-muted p-2 rounded-md">
-        <div>Total<br /><span className="font-semibold">₹{totals.amount.toLocaleString()}</span></div>
-        <div>Paid<br /><span className="font-semibold">₹{totals.paid.toLocaleString()}</span></div>
-        <div className="text-red-600">Pending<br /><span className="font-semibold">₹{totalPending.toLocaleString()}</span></div>
+        <div>Total<br /><span className="font-semibold">{totals.amount.toLocaleString()}</span></div>
+        <div>Paid<br /><span className="font-semibold">{totals.paid.toLocaleString()}</span></div>
+        <div className="text-red-600">Pending<br /><span className="font-semibold">{totalPending.toLocaleString()}</span></div>
       </div>
 
       {/* MAIN */}
@@ -133,9 +133,9 @@ const Purchases = () => {
                         </div>
 
                         <div className="text-right text-xs sm:text-sm">
-                          <div>₹{supplierAmount.toLocaleString()}</div>
-                          <div className="text-muted-foreground">Paid: ₹{supplierPaid.toLocaleString()}</div>
-                          <div className="text-red-600">Pending: ₹{supplierPending.toLocaleString()}</div>
+                          <div>{supplierAmount.toLocaleString()}</div>
+                          <div className="text-muted-foreground">Paid: {supplierPaid.toLocaleString()}</div>
+                          <div className="text-red-600">Pending: {supplierPending.toLocaleString()}</div>
                         </div>
                       </div>
 
@@ -145,9 +145,9 @@ const Purchases = () => {
                           <thead className="bg-gray-100 text-xs text-muted-foreground">
                             <tr>
                               <th className="p-2 text-left">Date</th>
-                              <th className="p-2 text-left">Amount (₹)</th>
-                              <th className="p-2 text-left">Paid (₹)</th>
-                              <th className="p-2 text-left">Pending (₹)</th>
+                              <th className="p-2 text-left">Amount</th>
+                              <th className="p-2 text-left">Paid</th>
+                              <th className="p-2 text-left">Pending</th>
                               <th className="p-2 text-left">Notes</th>
                               <th className="p-2 text-right">Actions</th>
                             </tr>
@@ -160,9 +160,9 @@ const Purchases = () => {
                               return (
                                 <tr key={it.id} className="border-t hover:bg-gray-50">
                                   <td className="p-2">{it.date || it.createdAt || "—"}</td>
-                                  <td className="p-2">₹{Number(it.amount).toLocaleString()}</td>
-                                  <td className="p-2">₹{Number(it.paid).toLocaleString()}</td>
-                                  <td className="p-2">₹{pending.toLocaleString()}</td>
+                                  <td className="p-2">{Number(it.amount).toLocaleString()}</td>
+                                  <td className="p-2">{Number(it.paid).toLocaleString()}</td>
+                                  <td className="p-2">{pending.toLocaleString()}</td>
                                   <td className="p-2">{it.notes || "-"}</td>
 
                                   <td className="p-2 text-right flex gap-3 justify-end">
@@ -189,12 +189,12 @@ const Purchases = () => {
                             <div key={it.id} className="p-3">
                               <div className="flex justify-between">
                                 <span className="text-sm font-medium">{it.date}</span>
-                                <span className="text-sm font-semibold">₹{it.amount.toLocaleString()}</span>
+                                <span className="text-sm font-semibold">{it.amount.toLocaleString()}</span>
                               </div>
 
                               <div className="mt-2 text-xs">
-                                <div>Paid: ₹{it.paid.toLocaleString()}</div>
-                                <div className="text-red-600">Pending: ₹{pending.toLocaleString()}</div>
+                                <div>Paid: {it.paid.toLocaleString()}</div>
+                                <div className="text-red-600">Pending: {pending.toLocaleString()}</div>
                                 <div>Notes: {it.notes || "-"}</div>
                               </div>
 

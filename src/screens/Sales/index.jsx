@@ -25,13 +25,11 @@ const SalesScreen = () => {
   const [sales, setSales] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Sorting state
   const [sortConfig, setSortConfig] = useState({
-    key: null, // 'createdAt', 'invoiceNumber', 'party'
-    direction: "asc", // 'asc' | 'desc'
+    key: null,
+    direction: "asc",
   });
 
-  // Load sales data
   useEffect(() => {
     const salesRef = ref(db, "sales");
     const unsubscribe = onValue(salesRef, (snapshot) => {
@@ -55,7 +53,6 @@ const SalesScreen = () => {
     return () => unsubscribe();
   }, []);
 
-  // Filter search
   const filteredSales = sales.filter((sale) => {
     const query = searchQuery.toLowerCase();
     return (
@@ -65,14 +62,12 @@ const SalesScreen = () => {
     );
   });
 
-  // Sorting function
   const sortedSales = [...filteredSales].sort((a, b) => {
     if (!sortConfig.key) return 0;
 
     let aValue = a[sortConfig.key];
     let bValue = b[sortConfig.key];
 
-    // Convert date string to timestamp for correct sorting
     if (sortConfig.key === "createdAt") {
       aValue = new Date(aValue).getTime();
       bValue = new Date(bValue).getTime();
@@ -83,7 +78,6 @@ const SalesScreen = () => {
     return 0;
   });
 
-  // Handle header click for sorting
   const handleSort = (key) => {
     setSortConfig((prev) => {
       if (prev.key === key) {
@@ -118,7 +112,6 @@ const SalesScreen = () => {
 
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-1 sm:p-4 space-y-2 sm:space-y-4 overflow-hidden">
-      {/* Header */}
       <header className="flex items-center justify-between py-2 border-b">
         <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
           <ArrowLeft className="h-4 w-4" />
@@ -134,7 +127,6 @@ const SalesScreen = () => {
         </Button>
       </header>
 
-      {/* Search */}
       <div className="flex justify-end">
         <input
           type="text"
@@ -145,7 +137,6 @@ const SalesScreen = () => {
         />
       </div>
 
-      {/* Sales Table */}
       <main className="flex-1 overflow-y-auto">
         <Card className="max-w-7xl mx-auto">
           <CardHeader>
@@ -168,18 +159,21 @@ const SalesScreen = () => {
                       >
                         Invoice Date {renderSortIcon("createdAt")}
                       </TableHead>
+
                       <TableHead
                         className="cursor-pointer"
                         onClick={() => handleSort("invoiceNumber")}
                       >
                         Invoice No. {renderSortIcon("invoiceNumber")}
                       </TableHead>
+
                       <TableHead
                         className="cursor-pointer"
                         onClick={() => handleSort("party")}
                       >
                         Party {renderSortIcon("party")}
                       </TableHead>
+
                       <TableHead>Total</TableHead>
                       <TableHead>Action</TableHead>
                     </TableRow>
@@ -210,7 +204,8 @@ const SalesScreen = () => {
                           </TableCell>
 
                           <TableCell>{sale.party}</TableCell>
-                          <TableCell>₹{totalAmount}</TableCell>
+
+                          <TableCell>{totalAmount}</TableCell>
 
                           <TableCell>
                             <button

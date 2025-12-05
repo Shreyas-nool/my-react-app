@@ -1,7 +1,8 @@
+// src/screens/stock/StockScreen.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 
 import {
   Card,
@@ -42,7 +43,6 @@ const StockScreen = () => {
 
       let finalList = [];
 
-      // LOOP THROUGH ALL date folders
       Object.entries(data).forEach(([dateKey, items]) => {
         Object.entries(items).forEach(([id, item]) => {
           finalList.push({
@@ -94,9 +94,7 @@ const StockScreen = () => {
       <main className="flex-1 overflow-y-auto">
         <Card className="max-w-7xl mx-auto">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold">
-              Stock List
-            </CardTitle>
+            <CardTitle className="text-lg font-semibold">Stock List</CardTitle>
           </CardHeader>
 
           <CardContent className="space-y-4 p-4 sm:p-6">
@@ -133,16 +131,16 @@ const StockScreen = () => {
                           <TableCell>{item.category}</TableCell>
                           <TableCell>{item.boxes}</TableCell>
                           <TableCell>{item.pieces}</TableCell>
-                          <TableCell>₹{item.pricePerPiece}</TableCell>
-                          <TableCell>₹{total.toFixed(2)}</TableCell>
+                          <TableCell>{item.pricePerPiece}</TableCell>
+                          <TableCell>{total.toFixed(2)}</TableCell>
                           <TableCell>{item.date}</TableCell>
 
                           <TableCell>
                             <button
                               onClick={() => deleteStock(item)}
-                              className="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded"
+                              className="p-1 bg-red-600 hover:bg-red-700 text-white rounded"
                             >
-                              Delete
+                              <Trash2 className="h-4 w-4" />
                             </button>
                           </TableCell>
                         </TableRow>

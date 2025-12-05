@@ -46,7 +46,7 @@ const AddStockScreen = () => {
   const [pricePerPiece, setPricePerPiece] = useState("");
 
   const [warehouse, setWarehouse] = useState("");
-  const [warehouses, setWarehouses] = useState([]);  // ✅ dynamic warehouse list
+  const [warehouses, setWarehouses] = useState([]);
 
   // FETCH PRODUCTS
   useEffect(() => {
@@ -61,7 +61,7 @@ const AddStockScreen = () => {
     });
   }, []);
 
-  // ✅ FETCH WAREHOUSES FROM DB
+  // FETCH WAREHOUSES
   useEffect(() => {
     const whRef = ref(db, "warehouse/");
     onValue(whRef, (snapshot) => {
@@ -85,7 +85,7 @@ const AddStockScreen = () => {
     setPricePerPiece(prod.pricePerPiece || prod.price || "");
   };
 
-  // SAVE STOCK
+  // SAVE STOCK (update if exists)
   const handleSaveStock = async () => {
     if (!selectedProduct || !boxes || !pieces || !pricePerPiece || !warehouse) {
       return alert("Please fill all fields.");
@@ -94,28 +94,63 @@ const AddStockScreen = () => {
     const today = new Date();
     const isoDate = formatToISO(today);
 
-    const stockEntry = {
-      id: Date.now(),
-      date: isoDate,
-      productId: selectedProduct.id,
-      productName: selectedProduct.productName,
-      category,
-      boxes: Number(boxes),
-      pieces: Number(pieces),
-      pricePerPiece: Number(pricePerPiece),
-      warehouse,
-      totalPieces: Number(boxes) * Number(pieces),
-      totalValue: Number(pieces) * Number(pricePerPiece),
-      createdAt: isoDate,
-    };
-
     try {
       const stockRef = ref(db, `stocks/date-${isoDate}`);
-      const newStock = push(stockRef);
-      await set(newStock, stockEntry);
+      onValue(stockRef, async (snapshot) => {
+        const data = snapshot.val() || {};
+        let existingKey = null;
+        let existingStock = null;
 
-      alert("Stock saved successfully!");
-      navigate(-1);
+        // Check if same product + warehouse exists
+        for (let key in data) {
+          if (data[key].productId === selectedProduct.id && data[key].warehouse === warehouse) {
+            existingKey = key;
+            existingStock = data[key];
+            break;
+          }
+        }
+
+        if (existingStock) {
+          // Update existing stock
+          const updatedStock = {
+            ...existingStock,
+            boxes: Number(existingStock.boxes) + Number(boxes),
+            pieces: Number(existingStock.pieces) + Number(pieces),
+            pricePerPiece: Number(pricePerPiece),
+            totalPieces: Number(existingStock.totalPieces) + Number(boxes) * Number(pieces),
+            totalValue: (Number(existingStock.totalPieces) + Number(boxes) * Number(pieces)) * Number(pricePerPiece),
+          };
+          await set(ref(db, `stocks/date-${isoDate}/${existingKey}`), updatedStock);
+          alert("Stock updated successfully!");
+        } else {
+          // Create new stock
+          const stockEntry = {
+            id: Date.now(),
+            date: isoDate,
+            productId: selectedProduct.id,
+            productName: selectedProduct.productName,
+            category,
+            boxes: Number(boxes),
+            pieces: Number(pieces),
+            pricePerPiece: Number(pricePerPiece),
+            warehouse,
+            totalPieces: Number(boxes) * Number(pieces),
+            totalValue: Number(boxes) * Number(pieces) * Number(pricePerPiece),
+            createdAt: isoDate,
+          };
+          const newStock = push(stockRef);
+          await set(newStock, stockEntry);
+          alert("Stock saved successfully!");
+        }
+
+        // Reset form
+        setSelectedProduct(null);
+        setCategory("");
+        setBoxes("");
+        setPieces("");
+        setPricePerPiece("");
+        setWarehouse("");
+      }, { onlyOnce: true });
     } catch (err) {
       console.error(err);
       alert("Error saving stock.");
@@ -123,79 +158,42 @@ const AddStockScreen = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-4 sm:p-6 mt-6 sm:mt-10 space-y-6 overflow-y-scroll"
-      style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-    >
-      {/* Hide Scrollbar for Chrome */}
+    <div className="max-w-6xl mx-auto p-4 sm:p-6 mt-6 sm:mt-10 space-y-6 overflow-y-scroll" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
       <style>{`
-        ::-webkit-scrollbar {
-          display: none;
-        }
+        ::-webkit-scrollbar { display: none; }
       `}</style>
 
-      {/* HEADER */}
       <header className="flex items-center justify-between py-2 border-b border-border/40">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(-1)}
-          className="h-8 w-8 p-0 hover:bg-accent"
-        >
+        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="h-8 w-8 p-0 hover:bg-accent">
           <ArrowLeft className="h-4 w-4" />
         </Button>
-
-        <h1 className="text-lg sm:text-xl font-semibold text-foreground/90">
-          Add Stock
-        </h1>
-
+        <h1 className="text-lg sm:text-xl font-semibold text-foreground/90">Add Stock</h1>
         <div className="w-8" />
       </header>
 
-      {/* MAIN CARD */}
       <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border max-w-xl mx-auto">
         <CardHeader className="pb-4">
-          <CardTitle className="text-lg font-semibold">
-            New Stock Entry
-          </CardTitle>
+          <CardTitle className="text-lg font-semibold">New Stock Entry</CardTitle>
         </CardHeader>
 
         <CardContent className="space-y-5">
-
-          {/* PRODUCT SELECTOR */}
           <div className="flex flex-col gap-1">
             <Label className="text-sm">Product</Label>
-
             <Popover open={productOpen} onOpenChange={setProductOpen}>
               <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-between px-3 font-normal"
-                >
+                <Button variant="outline" className="w-full justify-between px-3 font-normal">
                   {selectedProduct ? selectedProduct.productName : "Select Product"}
                   <ChevronsUpDown className="h-4 w-4 opacity-50" />
                 </Button>
               </PopoverTrigger>
-
               <PopoverContent className="w-[260px] p-0">
                 <Command>
                   <CommandInput placeholder="Search product..." />
                   <CommandList>
                     <CommandEmpty>No products found.</CommandEmpty>
-
                     {products.map((prod) => (
-                      <CommandItem
-                        key={prod.id}
-                        value={prod.productName}
-                        onSelect={() => handleSelectProduct(prod)}
-                      >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            selectedProduct?.id === prod.id
-                              ? "opacity-100"
-                              : "opacity-0"
-                          )}
-                        />
+                      <CommandItem key={prod.id} value={prod.productName} onSelect={() => handleSelectProduct(prod)}>
+                        <Check className={cn("mr-2 h-4 w-4", selectedProduct?.id === prod.id ? "opacity-100" : "opacity-0")} />
                         {prod.productName}
                       </CommandItem>
                     ))}
@@ -205,65 +203,37 @@ const AddStockScreen = () => {
             </Popover>
           </div>
 
-          {/* CATEGORY */}
           <div className="space-y-1">
             <Label>Category</Label>
             <Input type="text" value={category} disabled className="bg-muted/40" />
           </div>
 
-          {/* BOXES */}
           <div className="space-y-1">
             <Label>Boxes</Label>
-            <Input
-              type="number"
-              value={boxes}
-              onChange={(e) => setBoxes(e.target.value)}
-            />
+            <Input type="number" value={boxes} onChange={(e) => setBoxes(e.target.value)} />
           </div>
 
-          {/* PIECES */}
           <div className="space-y-1">
             <Label>Pieces</Label>
-            <Input
-              type="number"
-              value={pieces}
-              onChange={(e) => setPieces(e.target.value)}
-            />
+            <Input type="number" value={pieces} onChange={(e) => setPieces(e.target.value)} />
           </div>
 
-          {/* PRICE PER PIECE */}
           <div className="space-y-1">
-            <Label>Price Per Piece (₹)</Label>
-            <Input
-              type="number"
-              value={pricePerPiece}
-              onChange={(e) => setPricePerPiece(e.target.value)}
-            />
+            <Label>Price Per Piece</Label>
+            <Input type="number" value={pricePerPiece} onChange={(e) => setPricePerPiece(e.target.value)} />
           </div>
 
-          {/* WAREHOUSE DROPDOWN — NOW DYNAMIC */}
           <div className="space-y-1">
             <Label>Warehouse</Label>
-            <select
-              value={warehouse}
-              onChange={(e) => setWarehouse(e.target.value)}
-              className="border w-full h-10 rounded-md px-3"
-            >
+            <select value={warehouse} onChange={(e) => setWarehouse(e.target.value)} className="border w-full h-10 rounded-md px-3">
               <option value="">Select Warehouse</option>
-
               {warehouses.map((wh) => (
-                <option key={wh.id} value={wh.name}>
-                  {wh.name}
-                </option>
+                <option key={wh.id} value={wh.name}>{wh.name}</option>
               ))}
             </select>
           </div>
 
-          {/* SAVE BUTTON */}
-          <Button
-            className="w-full h-11 bg-primary hover:bg-primary/90"
-            onClick={handleSaveStock}
-          >
+          <Button className="w-full h-11 bg-primary hover:bg-primary/90" onClick={handleSaveStock}>
             <Save className="mr-2 h-4 w-4" /> Save Stock
           </Button>
         </CardContent>

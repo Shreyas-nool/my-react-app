@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { db } from "../../firebase";
 import { ref, onValue } from "firebase/database";
+
 import { Button } from "../../components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus, Repeat } from "lucide-react";
+
 import {
   Table,
   TableHeader,
@@ -16,28 +18,41 @@ import {
 const TalhaBankPayments = () => {
   const navigate = useNavigate();
   const [payments, setPayments] = useState([]);
+  const [balance, setBalance] = useState(0);
+
+  const CURRENT_BANK = "Talha";
 
   useEffect(() => {
     const paymentsRef = ref(db, "payments");
 
-    onValue(paymentsRef, (snapshot) => {
+    const unsubscribe = onValue(paymentsRef, (snapshot) => {
       const data = snapshot.val();
       if (!data) {
         setPayments([]);
+        setBalance(0);
         return;
       }
 
-      // Filter payments for Talha bank
+      // Filter payments for Talha bank (using first word)
       const talhaPayments = Object.values(data).filter(
-        (p) => p.bank === "Talha - Online"
+        (p) => p.bank && p.bank.trim().split(" ")[0] === CURRENT_BANK
       );
 
       setPayments(talhaPayments);
+
+      // Calculate balance
+      const total = talhaPayments.reduce(
+        (acc, curr) => acc + Number(curr.amount || 0),
+        0
+      );
+      setBalance(total);
     });
+
+    return () => unsubscribe();
   }, []);
 
   return (
-    <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-1 sm:p-4 space-y-4 overflow-hidden">
+    <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-2 sm:p-4 space-y-4 overflow-hidden">
       {/* Header */}
       <header className="flex items-center justify-between py-2 sm:py-3 border-b border-border/50">
         <Button
@@ -50,14 +65,32 @@ const TalhaBankPayments = () => {
         </Button>
 
         <div className="flex-1 text-center">
-          <h1 className="text-lg sm:text-xl font-semibold text-foreground/90">
-            Talha Bank Payments
-          </h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-foreground/90">Talha</h1>
           <p className="text-xs text-muted-foreground mt-0.5">SR Enterprise</p>
         </div>
 
-        <div className="w-8" /> {/* Placeholder to center title */}
+        <div className="w-8" />
       </header>
+
+      {/* Balance Card */}
+      <div className="flex justify-between items-center bg-white shadow-md rounded-2xl p-6 border border-gray-100">
+        <div className="text-2xl font-bold text-gray-800">Balance: {balance.toLocaleString()}</div>
+        <div className="flex gap-3">
+          <Button
+            className="flex items-center gap-2 bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg shadow"
+            onClick={() => navigate("/talha/add-reduce-money")}
+          >
+            <Plus className="h-4 w-4" /> Add/Reduce Money
+          </Button>
+
+          <Button
+            className="flex items-center gap-2 bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg shadow"
+            onClick={() => navigate("/talha/transfer-money")}
+          >
+            <Repeat className="h-4 w-4" /> Transfer Money
+          </Button>
+        </div>
+      </div>
 
       {/* Payments Table */}
       <main className="flex-1 overflow-y-auto">
@@ -66,7 +99,7 @@ const TalhaBankPayments = () => {
             No payments found for Talha bank.
           </div>
         ) : (
-          <div className="overflow-x-auto bg-white p-4 rounded-xl shadow-sm border">
+          <div className="overflow-x-auto bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -75,20 +108,26 @@ const TalhaBankPayments = () => {
                   <TableHead>Date</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Bank</TableHead>
-                  <TableHead>Created At</TableHead>
+                  <TableHead>Notes</TableHead>
                 </TableRow>
               </TableHeader>
+
               <TableBody>
-                {payments.map((p, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{index + 1}</TableCell>
-                    <TableCell>{p.party}</TableCell>
-                    <TableCell>{p.date}</TableCell>
-                    <TableCell>₹{Number(p.amount).toLocaleString()}</TableCell>
-                    <TableCell>{p.bank}</TableCell>
-                    <TableCell>{new Date(p.createdAt).toLocaleString()}</TableCell>
-                  </TableRow>
-                ))}
+                {payments.map((p, index) => {
+                  const isNegative = p.amount.toString().startsWith("-");
+                  return (
+                    <TableRow key={index}>
+                      <TableCell>{index + 1}</TableCell>
+                      <TableCell>{p.party}</TableCell>
+                      <TableCell>{p.date}</TableCell>
+                      <TableCell className={isNegative ? "text-red-600 font-semibold" : "text-green-600 font-semibold"}>
+                        {Number(p.amount).toLocaleString()}
+                      </TableCell>
+                      <TableCell>{p.bank}</TableCell>
+                      <TableCell>{p.notes || "-"}</TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

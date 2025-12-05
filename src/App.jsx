@@ -48,6 +48,18 @@ import JrBankPayments from "./screens/JR/index.jsx";
 
 import WarehouseDetails from "./screens/warehouse/WarehouseDetails.jsx";
 
+import PartyLedgerScreen from "./screens/ledger/PartyLedgerScreen";
+
+import DueDateScreen from "./screens/dueDate/DueDateScreen";
+
+import AddReduceMoney from "./screens/talha/AddReduceMoney.jsx";
+import TransferMoney from "./screens/talha/TransferMoney.jsx";
+
+import JrAddReduceMoney from "./screens/JR/JrAddReduceMoney";
+import JrTransferMoney from "./screens/JR/JrTransferMoney";
+
+import SrAddReduceMoney from "./screens/sr/SrAddReduceMoney";
+import SrTransferMoney from "./screens/sr/SrTransferMoney";
 
 // ✅ FULLY FIXED ROUTER
 const router = createBrowserRouter([
@@ -87,6 +99,7 @@ const router = createBrowserRouter([
           { path: "/warehouse", element: <WareHouse /> },
           { path: "/warehouse/add-warehouse", element: <AddWarehouse /> },
           { path: "/warehouse/transfer-stock", element: <TransferStock /> },
+          { path: "/warehouse/:id", element: <WarehouseDetails />},
 
           // Stock
           { path: "/stock", element: <StockScreen /> },
@@ -113,6 +126,7 @@ const router = createBrowserRouter([
           // Ledger
           { path: "/ledger", element: <Ledger /> },
           { path: "/ledger/add", element: <AddLedger /> },
+          { path: "/ledger/:id", element: <PartyLedgerScreen /> },
 
           // Purchase
           { path: "/purchase", element: <Purchase /> },
@@ -125,14 +139,22 @@ const router = createBrowserRouter([
 
           // Talha Bank Payments
           { path: "/talha", element: <TalhaBankPayments /> },
+          // Add/Reduce Money for Talha
+          { path: "/talha/add-reduce-money", element: <AddReduceMoney /> },
+          { path: "/talha/transfer-money", element: <TransferMoney /> },
 
           //SR Bank Payments
           { path: "/sr", element: <SrBankPayments /> },
+          { path: "/sr/add-reduce-money", element: <SrAddReduceMoney />},
+          { path: "/sr/transfer-money", element: <SrTransferMoney />},
 
           //JR Bank Payments
           { path: "/jr", element: <JrBankPayments /> },
+          { path: "/jr/add-reduce-money", element: <JrAddReduceMoney />},
+          { path: "/jr/transfer-money", element: <JrTransferMoney />},
 
-          { path: "/warehouse/:id", element: <WarehouseDetails />},
+          //Due date
+          { path: "/duedate", element: <DueDateScreen />},
 
         ],
       },

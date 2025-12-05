@@ -45,7 +45,6 @@ const AddPurchase = () => {
     onValue(stocksRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        // Flatten stock items from all dates
         const stockItems = [];
         Object.values(data).forEach((dateGroup) => {
           Object.values(dateGroup).forEach((stock) => {
@@ -60,12 +59,12 @@ const AddPurchase = () => {
   // SELECT STOCK ITEM
   const handleSelectStock = (stock) => {
     setSelectedStock(stock);
-    setQuantity(1); // default quantity 1
-    setPrice(stock.pricePerPiece || 0); // autofill price from stock
+    setQuantity(1);
+    setPrice(stock.pricePerPiece || 0);
     setProductOpen(false);
   };
 
-  // ADD ITEM TO PURCHASE
+  // ADD ITEM
   const handleAddItem = () => {
     if (!selectedStock || !quantity || !price) {
       return alert("Please select a stock item and fill quantity.");
@@ -89,7 +88,6 @@ const AddPurchase = () => {
     setItems([...items, newItem]);
     setSubtotal((prev) => prev + total);
 
-    // Reset selection
     setSelectedStock(null);
     setQuantity("");
     setPrice("");
@@ -139,9 +137,7 @@ const AddPurchase = () => {
         </Button>
 
         <div className="flex-1 text-center">
-          <h1 className="text-lg sm:text-xl font-semibold text-foreground/90">
-            Add Purchase
-          </h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-foreground/90">Add Purchase</h1>
         </div>
 
         <div className="w-8" />
@@ -149,6 +145,7 @@ const AddPurchase = () => {
 
       {/* MAIN INPUT CARD */}
       <div className="bg-white p-6 rounded-xl shadow-sm border space-y-6">
+
         {/* SUPPLIER & DATE */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div className="flex flex-col gap-1">
@@ -181,7 +178,6 @@ const AddPurchase = () => {
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-4">
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium">Product</label>
-
             <Popover open={productOpen} onOpenChange={setProductOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="w-full justify-between px-3">
@@ -213,15 +209,11 @@ const AddPurchase = () => {
 
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium">Quantity</label>
-            <Input
-              type="number"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-            />
+            <Input type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium">Price (₹)</label>
+            <label className="text-sm font-medium">Price</label>
             <Input type="number" value={price} readOnly className="bg-slate-100" />
           </div>
 
@@ -249,9 +241,7 @@ const AddPurchase = () => {
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td colSpan="5" className="text-center p-4">
-                  No items added.
-                </td>
+                <td colSpan="5" className="text-center p-4">No items added.</td>
               </tr>
             ) : (
               items.map((item, idx) => (
@@ -259,16 +249,15 @@ const AddPurchase = () => {
                   <td className="border p-2">{item.productName}</td>
                   <td className="border p-2">{item.category}</td>
                   <td className="border p-2 text-center">{item.quantity}</td>
-                  <td className="border p-2 text-right">₹{item.price}</td>
-                  <td className="border p-2 text-right">₹{item.total}</td>
+                  <td className="border p-2 text-right">{item.price}</td>
+                  <td className="border p-2 text-right">{item.total}</td>
                 </tr>
               ))
             )}
+
             {items.length > 0 && (
               <tr className="bg-gray-100 font-semibold">
-                <td colSpan="4" className="border p-2 text-right">
-                  Subtotal
-                </td>
+                <td colSpan="4" className="border p-2 text-right">Subtotal</td>
                 <td className="border p-2 text-right">{subtotal}</td>
               </tr>
             )}

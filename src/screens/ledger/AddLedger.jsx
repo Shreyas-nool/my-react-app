@@ -106,7 +106,7 @@ export default function AddLedger() {
 
           {/* PAID AMOUNT */}
           <div>
-            <label className="text-sm font-medium">Paid Amount (₹)</label>
+            <label className="text-sm font-medium">Paid Amount</label>
             <input
               type="number"
               className="w-full mt-1 p-2 border rounded-md"
