@@ -58,8 +58,8 @@ import TransferMoney from "./screens/talha/TransferMoney.jsx";
 import JrAddReduceMoney from "./screens/JR/JrAddReduceMoney";
 import JrTransferMoney from "./screens/JR/JrTransferMoney";
 
-import SrAddReduceMoney from "./screens/sr/SrAddReduceMoney";
-import SrTransferMoney from "./screens/sr/SrTransferMoney";
+import SrAddReduceMoney from "./screens/SR/SrAddReduceMoney";
+import SrTransferMoney from "./screens/SR/SrTransferMoney";
 
 // ✅ FULLY FIXED ROUTER
 const router = createBrowserRouter([
