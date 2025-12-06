@@ -28,7 +28,7 @@ const StockScreen = () => {
   const [stock, setStock] = useState([]);
 
   // ---------------------------------------------------------
-  // LOAD STOCKS FROM FIREBASE
+  // LOAD STOCKS FROM FIREBASE (NEW STRUCTURE SUPPORTED)
   // ---------------------------------------------------------
   useEffect(() => {
     const stockRef = ref(db, "stocks/");
@@ -44,9 +44,9 @@ const StockScreen = () => {
       let finalList = [];
 
       Object.entries(data).forEach(([dateKey, items]) => {
-        Object.entries(items).forEach(([id, item]) => {
+        Object.entries(items).forEach(([firebaseId, item]) => {
           finalList.push({
-            _firebaseId: id,
+            _firebaseId: firebaseId,
             dateKey,
             ...item,
           });
@@ -74,6 +74,7 @@ const StockScreen = () => {
 
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-1 sm:p-4 space-y-2 sm:space-y-4 overflow-hidden">
+      
       {/* Header */}
       <header className="flex items-center justify-between py-2 border-b border-border/50">
         <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
@@ -111,7 +112,8 @@ const StockScreen = () => {
                       <TableHead>Product Name</TableHead>
                       <TableHead>Category</TableHead>
                       <TableHead>Boxes</TableHead>
-                      <TableHead>Pieces</TableHead>
+                      <TableHead>Pieces/Box</TableHead>
+                      <TableHead>Total Pieces</TableHead>
                       <TableHead>Price/pc</TableHead>
                       <TableHead>Total Value</TableHead>
                       <TableHead>Date</TableHead>
@@ -121,18 +123,19 @@ const StockScreen = () => {
 
                   <TableBody>
                     {stock.map((item, index) => {
-                      const total =
-                        Number(item.pieces) * Number(item.pricePerPiece || 0);
+                      const totalPieces = Number(item.boxes) * Number(item.piecesPerBox);
+                      const totalValue = totalPieces * Number(item.pricePerPiece || 0);
 
                       return (
                         <TableRow key={item._firebaseId}>
                           <TableCell>{index + 1}</TableCell>
                           <TableCell>{item.productName || "-"}</TableCell>
-                          <TableCell>{item.category}</TableCell>
+                          <TableCell>{item.category || "-"}</TableCell>
                           <TableCell>{item.boxes}</TableCell>
-                          <TableCell>{item.pieces}</TableCell>
+                          <TableCell>{item.piecesPerBox}</TableCell>
+                          <TableCell>{totalPieces}</TableCell>
                           <TableCell>{item.pricePerPiece}</TableCell>
-                          <TableCell>{total.toFixed(2)}</TableCell>
+                          <TableCell>{totalValue.toFixed(2)}</TableCell>
                           <TableCell>{item.date}</TableCell>
 
                           <TableCell>

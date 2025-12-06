@@ -11,12 +11,16 @@ import { db } from "../../firebase";
 import { ref, push, set, onValue, runTransaction } from "firebase/database";
 import { cn } from "../../lib/utils";
 
+// Format ISO with date & time
 const formatToISO = (dateObj) => {
   if (!dateObj) return "";
   const yyyy = dateObj.getFullYear();
   const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
   const dd = String(dateObj.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  const hh = String(dateObj.getHours()).padStart(2, "0");
+  const min = String(dateObj.getMinutes()).padStart(2, "0");
+  const ss = String(dateObj.getSeconds()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}`;
 };
 
 const SalesInvoice = () => {
@@ -30,16 +34,16 @@ const SalesInvoice = () => {
   const [creditPeriod, setCreditPeriod] = useState("");
   const [selectedStock, setSelectedStock] = useState(null);
   const [productOpen, setProductOpen] = useState(false);
-
   const [box, setBox] = useState("");
   const [piecesPerBox, setPiecesPerBox] = useState("");
   const [pricePerItem, setPricePerItem] = useState("");
-
   const [items, setItems] = useState([]);
   const [subtotal, setSubtotal] = useState(0);
   const [createdAt, setCreatedAt] = useState(new Date());
   const [searchText, setSearchText] = useState("");
+  const [stockWarning, setStockWarning] = useState("");
 
+  // Fetch stocks & parties
   useEffect(() => {
     const stocksRef = ref(db, "stocks");
     onValue(stocksRef, (snapshot) => {
@@ -62,6 +66,7 @@ const SalesInvoice = () => {
     });
   }, []);
 
+  // Pre-fill invoice if editing
   useEffect(() => {
     if (invoiceToEdit) {
       setSelectedParty(invoiceToEdit.party || "");
@@ -77,20 +82,39 @@ const SalesInvoice = () => {
   const handleSelectStock = (stock) => {
     setSelectedStock(stock);
     setBox(1);
-    setPiecesPerBox(Number(stock.pieces) || 0);
+    setPiecesPerBox(Number(stock.piecesPerBox) || 0);
     setPricePerItem(Number(stock.pricePerPiece) || 0);
     setProductOpen(false);
+    setStockWarning("");
   };
 
   const handleBoxChange = (value) => {
+    if (!selectedStock) return;
     if (value < 0) return;
-    setBox(value);
-    setPiecesPerBox(value * (Number(selectedStock?.pieces) || 0));
+
+    const totalStockPieces = (Number(selectedStock.boxes) || 0) * (Number(selectedStock.piecesPerBox) || 1);
+    const desiredPieces = value * (Number(selectedStock.piecesPerBox) || 1);
+
+    if (desiredPieces > totalStockPieces) {
+      setStockWarning(`Not enough stock! Only ${totalStockPieces} pieces available.`);
+      setBox(value);
+    } else {
+      setStockWarning("");
+      setBox(value);
+      setPiecesPerBox(Number(selectedStock.piecesPerBox) || 0);
+    }
   };
 
   const handleAddItem = () => {
     if (!selectedStock || !box || !piecesPerBox || !pricePerItem) {
       return alert("Please fill all fields.");
+    }
+
+    const totalStockPieces = (Number(selectedStock.boxes) || 0) * (Number(selectedStock.piecesPerBox) || 1);
+    const desiredPieces = Number(box) * Number(piecesPerBox);
+
+    if (desiredPieces > totalStockPieces) {
+      return alert(`Cannot add! Only ${totalStockPieces} pieces available in stock.`);
     }
 
     const totalItem = Number(box) * Number(piecesPerBox) * Number(pricePerItem);
@@ -109,11 +133,11 @@ const SalesInvoice = () => {
 
     setItems([...items, newItem]);
     setSubtotal((prev) => prev + totalItem);
-
     setSelectedStock(null);
     setBox("");
     setPiecesPerBox("");
     setPricePerItem("");
+    setStockWarning("");
   };
 
   const handleDeleteItem = (index) => {
@@ -130,8 +154,7 @@ const SalesInvoice = () => {
         if (!current) return current;
 
         let totalPiecesStock =
-          (Number(current.boxes) || 0) * (Number(current.piecesPerBox) || 1) +
-          (Number(current.pieces) || 0);
+          (Number(current.boxes) || 0) * (Number(current.piecesPerBox) || 1);
 
         const soldPieces =
           (Number(item.box) || 0) * (Number(item.piecesPerBox) || 0);
@@ -147,25 +170,26 @@ const SalesInvoice = () => {
   };
 
   const handleCreateSales = async () => {
+    if (!selectedParty) return alert("Please select a party.");
     if (items.length === 0) return alert("Add items first.");
 
-    const isoDate = formatToISO(createdAt);
+    const isoDateTime = formatToISO(createdAt);
 
     try {
       let invoiceNumber = invoiceToEdit?.invoiceNumber;
       let saleRef;
 
       if (invoiceToEdit) {
-        saleRef = ref(db, `sales/date-${isoDate}/invoice-${invoiceNumber}`);
+        saleRef = ref(db, `sales/${isoDateTime}/invoice-${invoiceNumber}`);
       } else {
         const counterRef = ref(db, "invoiceCounter");
         const counterRes = await runTransaction(counterRef, (current) => (Number(current) || 1000) + 1);
         invoiceNumber = counterRes.snapshot.val();
-        saleRef = ref(db, `sales/date-${isoDate}/invoice-${invoiceNumber}`);
+        saleRef = ref(db, `sales/${isoDateTime}/invoice-${invoiceNumber}`);
       }
 
       const saleData = {
-        createdAt: isoDate,
+        createdAt: isoDateTime,
         party: selectedParty,
         creditPeriod,
         items,
@@ -176,9 +200,7 @@ const SalesInvoice = () => {
 
       await set(saleRef, saleData);
 
-      if (!invoiceToEdit) {
-        await updateStockAfterSale(items);
-      }
+      if (!invoiceToEdit) await updateStockAfterSale(items);
 
       alert(invoiceToEdit ? `Invoice updated! Invoice No: ${invoiceNumber}` : `Sale saved! Invoice No: ${invoiceNumber}`);
       navigate("/sales");
@@ -222,9 +244,7 @@ const SalesInvoice = () => {
           >
             <option value="">-- Choose Party --</option>
             {parties.map((p, i) => (
-              <option key={i} value={p.name}>
-                {p.name}
-              </option>
+              <option key={i} value={p.name}>{p.name}</option>
             ))}
           </select>
         </div>
@@ -234,7 +254,10 @@ const SalesInvoice = () => {
           <DatePicker
             selected={createdAt}
             onChange={(d) => setCreatedAt(d)}
-            dateFormat="dd/MM/yyyy"
+            showTimeSelect
+            timeFormat="HH:mm"
+            timeIntervals={1}
+            dateFormat="dd/MM/yyyy HH:mm"
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
           />
         </div>
@@ -265,29 +288,15 @@ const SalesInvoice = () => {
                 <CommandInput placeholder="Search product..." onValueChange={setSearchText} />
                 <CommandList>
                   {searchText.length < 2 && (
-                    <div className="p-2 text-sm text-red-500">
-                      Enter at least 2 characters to search.
-                    </div>
+                    <div className="p-2 text-sm text-red-500">Enter at least 2 characters to search.</div>
                   )}
                   <CommandEmpty>No product found.</CommandEmpty>
-
                   {searchText.length >= 2 &&
                     stocks
-                      .filter((s) =>
-                        s.productName.toLowerCase().includes(searchText.toLowerCase())
-                      )
+                      .filter((s) => s.productName.toLowerCase().includes(searchText.toLowerCase()))
                       .map((s) => (
-                        <CommandItem
-                          key={s.id}
-                          value={s.productName}
-                          onSelect={() => handleSelectStock(s)}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              selectedStock?.id === s.id ? "opacity-100" : "opacity-0"
-                            )}
-                          />
+                        <CommandItem key={s.id} value={s.productName} onSelect={() => handleSelectStock(s)}>
+                          <Check className={cn("mr-2 h-4 w-4", selectedStock?.id === s.id ? "opacity-100" : "opacity-0")} />
                           {s.productName}
                         </CommandItem>
                       ))}
@@ -305,6 +314,7 @@ const SalesInvoice = () => {
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium">Box</label>
           <Input type="number" value={box} onChange={(e) => handleBoxChange(Number(e.target.value))} />
+          {stockWarning && <p className="text-red-500 text-xs mt-1">{stockWarning}</p>}
         </div>
 
         <div className="flex flex-col gap-1">
@@ -319,9 +329,7 @@ const SalesInvoice = () => {
       </div>
 
       <div className="flex justify-end mt-2">
-        <Button className="bg-primary" onClick={handleAddItem}>
-          Add to Invoice
-        </Button>
+        <Button className="bg-primary" onClick={handleAddItem}>Add to Invoice</Button>
       </div>
 
       <div className="overflow-x-auto bg-white p-4 rounded-xl shadow-sm border mt-4">
@@ -340,11 +348,7 @@ const SalesInvoice = () => {
           </thead>
           <tbody>
             {items.length === 0 ? (
-              <tr>
-                <td colSpan="8" className="text-center p-4">
-                  No items added.
-                </td>
-              </tr>
+              <tr><td colSpan="8" className="text-center p-4">No items added.</td></tr>
             ) : (
               items.map((item, i) => (
                 <tr key={i}>
@@ -363,18 +367,13 @@ const SalesInvoice = () => {
                 </tr>
               ))
             )}
-
             {items.length > 0 && (
               <tr className="bg-gray-100 font-semibold">
-                <td colSpan="2" className="border p-2 text-right">
-                  Total
-                </td>
+                <td colSpan="2" className="border p-2 text-right">Total</td>
                 <td className="border p-2" />
                 <td className="border p-2 text-center">{totalBoxes}</td>
                 <td className="border p-2 text-center">{totalPieces}</td>
-                <td colSpan="3" className="border p-2 text-right">
-                  {subtotal}
-                </td>
+                <td colSpan="3" className="border p-2 text-right">{subtotal}</td>
               </tr>
             )}
           </tbody>

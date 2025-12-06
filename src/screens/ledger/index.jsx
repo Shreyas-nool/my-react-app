@@ -24,79 +24,24 @@ import {
 
 export default function Ledger() {
   const navigate = useNavigate();
-  const [ledgerData, setLedgerData] = useState([]);
+  const [parties, setParties] = useState([]);
 
   useEffect(() => {
-    const ledgerSummaryRef = ref(db, "ledgerSummary");
-    const ledgerRef = ref(db, "ledger");
+    const partiesRef = ref(db, "parties");
 
-    // Listen to both ledgerSummary and ledger nodes
-    const unsubscribeSummary = onValue(ledgerSummaryRef, (snapshot) => {
-      const summaryData = snapshot.val() || {};
-
-      // Convert to array of party summaries
-      const summaryList = Object.values(summaryData).map((entry) => ({
-        partyId: entry.partyId,
-        partyName: entry.partyName,
-        openingBalance: Number(entry.openingBalance || 0),
-        balance: Number(entry.balance || 0),
-        totalDebit: Number(entry.totalDebit || 0),
-        totalCredit: Number(entry.totalCredit || 0),
-        date: entry.date,
+    const unsubscribe = onValue(partiesRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      const partyList = Object.entries(data).map(([id, party]) => ({
+        partyId: id,
+        partyName: party.name || "Unknown",
+        openingBalance: Number(party.openingBalance || 0), // purely display
+        balance: Number(party.balance || 0), // used for calculations
       }));
-
-      setLedgerData((prev) => mergeLedgerWithLatest(prev, summaryList));
+      setParties(partyList);
     });
 
-    const unsubscribeLedger = onValue(ledgerRef, (snapshot) => {
-      const ledgerDataRaw = snapshot.val() || {};
-      const latestBalances = [];
-
-      Object.entries(ledgerDataRaw).forEach(([partyId, datesObj]) => {
-        let latestDate = null;
-        let latestEntry = null;
-
-        Object.entries(datesObj).forEach(([date, entriesObj]) => {
-          Object.values(entriesObj).forEach((entry) => {
-            if (!latestDate || new Date(entry.createdAt) > new Date(latestDate)) {
-              latestDate = entry.createdAt || entry.date;
-              latestEntry = entry;
-            }
-          });
-        });
-
-        if (latestEntry) {
-          latestBalances.push({
-            partyId: latestEntry.partyId,
-            partyName: latestEntry.partyName,
-            balance: latestEntry.runningBalance ?? 0,
-          });
-        }
-      });
-
-      setLedgerData((prev) => mergeLedgerWithLatest(prev, latestBalances));
-    });
-
-    return () => {
-      unsubscribeSummary();
-      unsubscribeLedger();
-    };
+    return () => unsubscribe();
   }, []);
-
-  // Merge summary and ledger latest balances
-  const mergeLedgerWithLatest = (prevData, newData) => {
-    const merged = {};
-
-    newData.forEach((entry) => {
-      merged[entry.partyId] = { ...merged[entry.partyId], ...entry };
-    });
-
-    prevData.forEach((entry) => {
-      merged[entry.partyId] = { ...entry, ...merged[entry.partyId] };
-    });
-
-    return Object.values(merged);
-  };
 
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-1 sm:p-4 space-y-4">
@@ -128,39 +73,41 @@ export default function Ledger() {
                   <TableRow>
                     <TableHead>Party Name</TableHead>
                     <TableHead>Opening Balance</TableHead>
-                    <TableHead>Balance</TableHead>
+                    <TableHead>Current Balance</TableHead>
                   </TableRow>
                 </TableHeader>
 
                 <TableBody>
-                  {ledgerData.map((entry) => (
+                  {parties.map((party) => (
                     <TableRow
-                      key={entry.partyId}
+                      key={party.partyId}
                       className="cursor-pointer hover:bg-gray-50"
                       onClick={() =>
-                        navigate(`/ledger/${entry.partyId}`, { state: { party: entry } })
+                        navigate(`/ledger/${party.partyId}`, { state: { party } })
                       }
                     >
-                      <TableCell>{entry.partyName}</TableCell>
+                      <TableCell>{party.partyName}</TableCell>
 
+                      {/* Display only, no calculation */}
                       <TableCell
                         className={
-                          entry.openingBalance > 0
+                          party.openingBalance > 0
                             ? "text-red-600 font-semibold"
                             : "text-green-600 font-semibold"
                         }
                       >
-                        {entry.openingBalance || 0}
+                        {party.openingBalance}
                       </TableCell>
 
+                      {/* Only balance used in calculations */}
                       <TableCell
                         className={
-                          (entry.balance || 0) >= 0
+                          party.balance >= 0
                             ? "text-green-600 font-semibold"
                             : "text-red-600 font-semibold"
                         }
                       >
-                        {entry.balance || 0}
+                        {party.balance}
                       </TableCell>
                     </TableRow>
                   ))}

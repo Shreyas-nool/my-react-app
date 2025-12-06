@@ -20,20 +20,36 @@ export default function PaymentScreen() {
     const paymentsRef = ref(db, "payments");
 
     const unsubscribe = onValue(paymentsRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-
-        const list = Object.keys(data).map((id) => ({
-          id,
-          ...data[id],
-        }));
-
-        list.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-        setPayments(list);
-      } else {
+      if (!snapshot.exists()) {
         setPayments([]);
+        return;
       }
+
+      const data = snapshot.val();
+      let list = [];
+
+      // Iterate: party → date → individual payment
+      Object.keys(data).forEach((party) => {
+        Object.keys(data[party]).forEach((date) => {
+          const paymentsOnDate = data[party][date];
+          Object.keys(paymentsOnDate).forEach((paymentKey) => {
+            const payment = paymentsOnDate[paymentKey];
+            list.push({
+              id: `${party}_${date}_${paymentKey}`,
+              date,
+              party,
+              amount: payment.amount,
+              bank: payment.bank,
+              createdAt: payment.createdAt || "",
+            });
+          });
+        });
+      });
+
+      // Sort by date descending
+      list.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+      setPayments(list);
     });
 
     return () => unsubscribe();

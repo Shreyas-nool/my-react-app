@@ -59,60 +59,65 @@ export default function AddPayment() {
 
   const handleAmountChange = (e) => {
     let val = e.target.value;
-    // Allow decimals and prevent negative numbers
+
     if (val === "") {
       setAmount("");
       return;
     }
+
     if (/^\d*\.?\d*$/.test(val)) {
       setAmount(val);
     }
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!amount || parseFloat(amount) <= 0 || !party || !bank) {
-      return alert("Please fill all required fields.");
-    }
+  e.preventDefault();
+  if (!amount || parseFloat(amount) <= 0 || !party || !bank) {
+    return alert("Please fill all required fields.");
+  }
 
-    const formattedDate = date.toISOString().split("T")[0];
-    const numericAmount = parseFloat(amount);
+  // Store full timestamp (date + time) for createdAt
+  const formattedDate = date.toISOString().split("T")[0]; // For path
+  const numericAmount = parseFloat(amount);
+  const timestamp = new Date().toISOString(); // full ISO timestamp
 
-    // Payment going to the party, amount is negative for the bank
-    const paymentData = {
-      date: formattedDate,
-      party,
-      amount: -numericAmount, // money leaves bank
-      bank,
-      createdAt: new Date().toISOString(),
-    };
-
-    try {
-      const db = getDatabase();
-
-      // Construct key using party and bank names (replace spaces with underscores)
-      const key = `${party.replace(/\s+/g, "_")}_${bank.replace(/\s+/g, "_")}`;
-
-      // Save in main payments node
-      const paymentRef = ref(db, `payments/${key}`);
-      await set(paymentRef, paymentData);
-
-      // Also save under selected bank
-      const bankObj = banks.find(
-        (b) => `${b.bankName} - ${b.accountDetails}` === bank
-      );
-      if (bankObj) {
-        const bankPaymentRef = ref(db, `banks/${bankObj.id}/payments/${key}`);
-        await set(bankPaymentRef, paymentData);
-      }
-
-      alert("Payment added successfully!");
-      navigate("/payment");
-    } catch (error) {
-      console.error(error);
-      alert("Failed to add payment");
-    }
+  const paymentData = {
+    date: formattedDate,
+    party,
+    amount: numericAmount,
+    bank,              // just store method for reference
+    createdAt: timestamp,
   };
+
+  try {
+    const db = getDatabase();
+
+    // 1️⃣ Get current payments under party/date
+    const paymentRef = ref(db, `payments/${party}/${formattedDate}`);
+    const snapshot = await get(paymentRef);
+    let nextIndex = 1;
+
+    if (snapshot.exists()) {
+      const existingPayments = snapshot.val();
+      const keys = Object.keys(existingPayments).map(
+        (k) => parseInt(k.replace("payment", "")) || 0
+      );
+      if (keys.length > 0) nextIndex = Math.max(...keys) + 1;
+    }
+
+    const key = `payment${nextIndex}`;
+
+    // 2️⃣ Save payment under party/date ONLY
+    await set(ref(db, `payments/${party}/${formattedDate}/${key}`), paymentData);
+
+    alert("Payment added successfully!");
+    navigate("/payment");
+  } catch (error) {
+    console.error(error);
+    alert("Failed to add payment");
+  }
+};
+
 
   return (
     <div className="max-w-2xl mx-auto mt-8 px-4">
@@ -134,7 +139,9 @@ export default function AddPayment() {
       {/* Card */}
       <Card className="mt-6 border border-border/40 shadow-sm">
         <CardHeader className="pb-1">
-          <CardTitle className="text-base font-semibold">Payment Details</CardTitle>
+          <CardTitle className="text-base font-semibold">
+            Payment Details
+          </CardTitle>
         </CardHeader>
 
         <CardContent>
@@ -202,7 +209,6 @@ export default function AddPayment() {
               </select>
             </div>
 
-            {/* Submit Button */}
             <Button
               type="submit"
               className="w-full h-10 text-sm font-semibold bg-primary hover:bg-primary/90"
