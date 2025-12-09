@@ -20,7 +20,7 @@ import {
 
 import { useEffect, useState } from "react";
 import { db } from "../../firebase";
-import { ref, onValue, push, set } from "firebase/database";
+import { ref, onValue, set } from "firebase/database";
 
 const AddReduce = () => {
     const navigate = useNavigate();
@@ -30,9 +30,7 @@ const AddReduce = () => {
     const [selectedBank, setSelectedBank] = useState("");
     const [banks, setBanks] = useState([]);
 
-    // ---------------------------
-    // FETCH BANK LIST FROM FIREBASE
-    // ---------------------------
+    // Fetch banks
     useEffect(() => {
         const bankRef = ref(db, "banks/");
         onValue(bankRef, (snapshot) => {
@@ -48,33 +46,50 @@ const AddReduce = () => {
         });
     }, []);
 
-    // ---------------------------
+    // Format date as ID
+    const generateDateID = () => {
+        const d = new Date();
+        return (
+            d.getFullYear() +
+            "-" +
+            String(d.getMonth() + 1).padStart(2, "0") +
+            "-" +
+            String(d.getDate()).padStart(2, "0") +
+            "-" +
+            String(d.getHours()).padStart(2, "0") +
+            "-" +
+            String(d.getMinutes()).padStart(2, "0") +
+            "-" +
+            String(d.getSeconds()).padStart(2, "0")
+        );
+    };
+
     // SAVE EXPENSE
-    // ---------------------------
     const handleSaveExpense = async () => {
         if (!amount || !expenseFor || !selectedBank) {
             return alert("Please fill all fields");
         }
 
-        const today = new Date();
-        const isoDate = today.toISOString().split("T")[0];
+        // Use formatted datetime as ID
+        const dateID = generateDateID();
+
+        const bankNameOnly = selectedBank.split(" - ")[0];
 
         const expenseEntry = {
-            id: Date.now(),
             amount: Number(amount),
             expenseFor,
             bank: selectedBank,
-            date: isoDate,
-            createdAt: new Date().toISOString(),
+            type: "expense",
         };
 
         try {
-            const expRef = ref(db, "expenses/");
-            const newExp = push(expRef);
-            await set(newExp, expenseEntry);
+            // Save inside expenses/<BankName>/<DateID>
+            const expRef = ref(db, `expenses/${bankNameOnly}/${dateID}`);
+            await set(expRef, expenseEntry);
 
-            alert("Expense saved");
+            alert("Expense saved successfully");
             navigate("/expense");
+
         } catch (error) {
             console.log(error);
             alert("Error saving expense");
@@ -141,7 +156,7 @@ const AddReduce = () => {
                                 />
                             </div>
 
-                            {/* BANK SELECT (FROM FIREBASE) */}
+                            {/* BANK SELECT */}
                             <div className="space-y-2">
                                 <Label>Expense Done From</Label>
                                 <Select onValueChange={setSelectedBank}>
@@ -151,7 +166,6 @@ const AddReduce = () => {
 
                                     <SelectContent>
                                         <SelectGroup>
-
                                             {banks.map((bank) => (
                                                 <SelectItem
                                                     key={bank.id}
@@ -160,7 +174,6 @@ const AddReduce = () => {
                                                     {bank.bankName} — {bank.accountDetails}
                                                 </SelectItem>
                                             ))}
-
                                         </SelectGroup>
                                     </SelectContent>
                                 </Select>

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { ArrowLeft, Diff } from "lucide-react";
@@ -7,11 +7,42 @@ import {
     TableHeader,
     TableRow,
     TableHead,
+    TableBody,
+    TableCell,
 } from "../../components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { db } from "../../firebase";
+import { ref, onValue } from "firebase/database";
 
 const ExpenseScreen = () => {
     const navigate = useNavigate();
+    const [expenses, setExpenses] = useState([]);
+
+    // -----------------------------
+    // FETCH ALL EXPENSES
+    // -----------------------------
+    useEffect(() => {
+        const expRef = ref(db, "expenses/");
+        onValue(expRef, (snapshot) => {
+            const data = snapshot.val() || {};
+
+            // Flatten: expenses > bank > entries
+            let allExpenses = [];
+
+            Object.keys(data).forEach((bankName) => {
+                const bankExpenses = data[bankName] || {};
+                Object.values(bankExpenses).forEach((exp) => {
+                    allExpenses.push(exp);
+                });
+            });
+
+            // Sort by newest first
+            allExpenses.sort((a, b) => Number(b.id) - Number(a.id));
+
+            setExpenses(allExpenses);
+        });
+    }, []);
+
     return (
         <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-1 sm:p-4 space-y-2 sm:space-y-4 overflow-hidden">
             {/* Header */}
@@ -19,7 +50,7 @@ const ExpenseScreen = () => {
                 <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => navigate("/")} // Or back to dashboard/home
+                    onClick={() => navigate("/")}
                     className="h-8 w-8 sm:h-9 sm:w-9 p-0 sm:p-2 hover:bg-accent"
                 >
                     <ArrowLeft className="h-4 w-4" />
@@ -32,12 +63,14 @@ const ExpenseScreen = () => {
                         SR Enterprise
                     </p>
                 </div>
+
+                {/* BUTTON NAME CHANGED */}
                 <Button
                     onClick={() => navigate("/expense/create-expense")}
                     className="h-8 sm:h-9 text-sm font-medium bg-primary hover:bg-primary/90"
                 >
                     <Diff className="h-4 w-4 mr-2" />
-                    Add/Reduce Money
+                    Add Expense
                 </Button>
             </header>
 
@@ -48,6 +81,7 @@ const ExpenseScreen = () => {
                             All Expenses
                         </CardTitle>
                     </CardHeader>
+
                     <CardContent className="space-y-4 p-4 sm:p-6">
                         <div className="overflow-x-auto">
                             <Table>
@@ -57,13 +91,45 @@ const ExpenseScreen = () => {
                                             Amount
                                         </TableHead>
                                         <TableHead className="w-[150px] text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-                                            Expense Done for
+                                            Expense Done For
                                         </TableHead>
+
+                                        {/* NAME CHANGED HERE */}
                                         <TableHead className="w-[150px] text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-                                            Expense Done In
+                                            Expense Done From
                                         </TableHead>
                                     </TableRow>
                                 </TableHeader>
+
+                                {/* BODY SHOWING ALL EXPENSES */}
+                                <TableBody>
+                                    {expenses.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell
+                                                colSpan={3}
+                                                className="text-center text-sm text-muted-foreground py-4"
+                                            >
+                                                No expenses found
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        expenses.map((exp) => (
+                                            <TableRow key={exp.id}>
+                                                <TableCell className="text-sm">
+                                                    ₹{exp.amount}
+                                                </TableCell>
+
+                                                <TableCell className="text-sm">
+                                                    {exp.expenseFor}
+                                                </TableCell>
+
+                                                <TableCell className="text-sm">
+                                                    {exp.bank}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
+                                </TableBody>
                             </Table>
                         </div>
                     </CardContent>

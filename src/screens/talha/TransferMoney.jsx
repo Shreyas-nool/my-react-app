@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
-import { ref, onValue, push, serverTimestamp } from "firebase/database";
+import { ref, onValue, push } from "firebase/database";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Textarea } from "../../components/ui/textarea";
@@ -25,94 +25,103 @@ const TransferMoney = () => {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [balance, setBalance] = useState(0);
 
-  // The "Transfer From" input value
-  const transferFromInput = "Talha - Online";
+  const CURRENT_BANK = "Talha"; // fixed
 
-  // Extract the first word to match the database bankName
-  const fromBankKey = transferFromInput.split(" ")[0].trim().toLowerCase();
-
+  // 🟩 Load banks except current
   useEffect(() => {
-    // Fetch all banks and filter out the current bank
     const banksRef = ref(db, "banks");
     onValue(banksRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        const filteredBanks = Object.values(data).filter(
-          (b) =>
-            b.bankName &&
-            b.bankName.trim().toLowerCase() !== fromBankKey
+        const filtered = Object.values(data).filter(
+          (b) => b.bankName !== CURRENT_BANK
         );
-        setBanks(filteredBanks);
+        setBanks(filtered);
       }
     });
+  }, []);
 
-    // Fetch balance for the current bank
+  // 🟩 Load REAL balance using the SAME logic as TalhaBankPayments.jsx
+  useEffect(() => {
     const paymentsRef = ref(db, "payments");
-    onValue(paymentsRef, (snapshot) => {
+
+    const unsub = onValue(paymentsRef, (snapshot) => {
       const data = snapshot.val();
-      if (!data) return;
+      if (!data) return setBalance(0);
 
-      const currentBankPayments = Object.values(data).filter(
-        (p) =>
-          p.bank &&
-          p.bank.trim().toLowerCase().startsWith(fromBankKey)
-      );
+      const talhaPayments = [];
 
-      const total = currentBankPayments.reduce(
-        (acc, curr) => acc + Number(curr.amount || 0),
+      Object.values(data).forEach((partyGroup) => {
+        Object.values(partyGroup).forEach((dateGroup) => {
+          Object.values(dateGroup).forEach((payment) => {
+            if (payment.bank?.startsWith(CURRENT_BANK)) {
+              talhaPayments.push(payment);
+            }
+          });
+        });
+      });
+
+      const total = talhaPayments.reduce(
+        (sum, p) => sum + Number(p.amount || 0),
         0
       );
+
       setBalance(total);
     });
-  }, [fromBankKey]);
+
+    return () => unsub();
+  }, []);
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (!targetBank || !amount || !date) {
-    toast.error("Please fill all required fields");
-    return;
-  }
+    e.preventDefault();
 
-  const amt = Number(amount);
-  const now = Date.now();
+    if (!targetBank || !amount || !date) {
+      toast.error("Fill all fields");
+      return;
+    }
 
-  try {
-    // 1️⃣ Deduct from Talha
-    await push(ref(db, "payments"), {
-      party: "Transfer",
-      amount: -amt, // negative for deduction
-      bank: transferFromInput,
-      createdAt: now,
-      notes: `Transferred to ${targetBank}`,
-      date,
-      type: "transfer",
-    });
+    const amt = Number(amount);
+    const createdAt = new Date().toISOString();
 
-    // 2️⃣ Add to target bank
-    await push(ref(db, "payments"), {
-      party: "Transfer",
-      amount: amt, // positive for addition
-      bank: targetBank,
-      createdAt: now,
-      notes: `Received from ${transferFromInput}`,
-      date,
-      type: "transfer",
-    });
+    try {
+      // 🔥 1️⃣ SAVE TRANSFER OUT OF TALHA
+      const talhaRef = ref(db, `payments/${CURRENT_BANK}/${date}`);
+      await push(talhaRef, {
+        amount: -amt,
+        party: "Transfer",
+        date,
+        notes,
+        createdAt,
+        type: "transfer",
+        bank: `${CURRENT_BANK} - Transfer`,
+        from: CURRENT_BANK,
+        to: targetBank,
+      });
 
-    toast.success("Money transferred successfully");
-    setAmount("");
-    setNotes("");
-    navigate("/talha");
-  } catch (error) {
-    console.error(error);
-    toast.error("Failed to transfer money");
-  }
-};
+      // 🔥 2️⃣ SAVE TRANSFER INTO TARGET BANK
+      const targetRef = ref(db, `payments/${targetBank}/${date}`);
+      await push(targetRef, {
+        amount: amt,
+        party: "Transfer",
+        date,
+        notes,
+        createdAt,
+        type: "transfer",
+        bank: `${targetBank} - Transfer`,
+        from: CURRENT_BANK,
+        to: targetBank,
+      });
 
+      toast.success("Transfer completed");
+      navigate("/talha");
+    } catch (error) {
+      console.log(error);
+      toast.error("Transfer failed");
+    }
+  };
 
   return (
     <div className="flex flex-col max-w-3xl mx-auto mt-10 p-4 space-y-6 bg-background">
-      {/* Header */}
       <header className="flex items-center gap-4">
         <Button
           variant="ghost"
@@ -122,80 +131,75 @@ const TransferMoney = () => {
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-lg font-semibold text-foreground/90">
-          Transfer Money
-        </h1>
+        <h1 className="text-lg font-semibold">Transfer Money</h1>
       </header>
 
-      {/* Current Balance */}
-      <div className="bg-white p-4 rounded-2xl shadow-md border border-gray-100 text-gray-800 font-semibold text-lg">
+      {/* Balance */}
+      <div className="bg-white p-4 rounded-2xl shadow-md text-lg font-semibold">
         Current Balance: {balance.toLocaleString()}
       </div>
 
-      {/* Transfer Form */}
+      {/* FORM */}
       <form
-        className="bg-white p-6 rounded-2xl shadow-md space-y-4 border border-gray-100"
         onSubmit={handleSubmit}
+        className="bg-white p-6 rounded-2xl shadow-md space-y-4"
       >
-        {/* Transfer From */}
-        <div className="flex flex-col space-y-2">
-          <label className="text-sm font-medium text-gray-700">Transfer From</label>
-          <Input value={transferFromInput} disabled />
+        {/* From */}
+        <div>
+          <label className="text-sm">Transfer From</label>
+          <Input value={CURRENT_BANK} disabled />
         </div>
 
-        {/* Transfer To */}
-        <div className="flex flex-col space-y-2">
-          <label className="text-sm font-medium text-gray-700">Transfer To</label>
-          <Select value={targetBank} onValueChange={setTargetBank}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select a bank" />
-            </SelectTrigger>
-            <SelectContent>
-              {banks.map((b, i) => (
-                <SelectItem key={i} value={b.bankName}>
-                  {b.bankName} ({b.accountDetails})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {/* To + Date */}
+        <div className="flex gap-4">
+          <div className="w-1/2">
+            <label className="text-sm">Transfer To</label>
+            <Select value={targetBank} onValueChange={setTargetBank}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select bank" />
+              </SelectTrigger>
+              <SelectContent>
+                {banks.map((b) => (
+                  <SelectItem key={b.bankName} value={b.bankName}>
+                    {b.bankName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-        {/* Date */}
-        <div className="flex flex-col space-y-2">
-          <label className="text-sm font-medium text-gray-700">Date</label>
-          <Input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
+          <div className="w-1/2">
+            <label className="text-sm">Date</label>
+            <Input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </div>
         </div>
 
         {/* Amount */}
-        <div className="flex flex-col space-y-2">
-          <label className="text-sm font-medium text-gray-700">Amount</label>
+        <div>
+          <label className="text-sm">Amount</label>
           <Input
             type="number"
-            placeholder="Enter amount"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
           />
         </div>
 
         {/* Notes */}
-        <div className="flex flex-col space-y-2">
-          <label className="text-sm font-medium text-gray-700">Notes</label>
+        <div>
+          <label className="text-sm">Notes</label>
           <Textarea
-            placeholder="Optional notes"
+            rows={3}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
+            placeholder="Optional"
           />
         </div>
 
-        {/* Submit Button */}
-        <Button
-          type="submit"
-          className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg"
-        >
+        <Button type="submit" className="bg-black text-white w-full">
           Transfer
         </Button>
       </form>

@@ -13,14 +13,16 @@ const AddReduceMoney = () => {
   const navigate = useNavigate();
 
   const [amount, setAmount] = useState("");
-  const [type, setType] = useState("add"); // "add" or "reduce"
+  const [type, setType] = useState("add");
   const [notes, setNotes] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [balance, setBalance] = useState(0);
 
   const CURRENT_BANK = "Talha";
 
-  // Fetch Talha balance
+  // --------------------------
+  // FIXED BALANCE FETCH LOGIC
+  // --------------------------
   useEffect(() => {
     const paymentsRef = ref(db, "payments");
 
@@ -31,20 +33,35 @@ const AddReduceMoney = () => {
         return;
       }
 
-      const talhaPayments = Object.values(data).filter(
-        (p) => p.bank === CURRENT_BANK + " - Online"
-      );
+      let total = 0;
 
-      const total = talhaPayments.reduce(
-        (acc, curr) => acc + Number(curr.amount || 0),
-        0
-      );
+      // Traverse payments → party → date → paymentId
+      Object.values(data).forEach((partyNode) => {
+        if (typeof partyNode !== "object") return;
+
+        Object.values(partyNode).forEach((dateNode) => {
+          if (typeof dateNode !== "object") return;
+
+          Object.values(dateNode).forEach((payment) => {
+            if (
+              payment.bank === CURRENT_BANK + " - Online" &&
+              Number(payment.amount)
+            ) {
+              total += Number(payment.amount);
+            }
+          });
+        });
+      });
+
       setBalance(total);
     });
 
     return () => unsubscribe();
   }, []);
 
+  // --------------------------
+  // SUBMIT HANDLER
+  // --------------------------
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -65,9 +82,12 @@ const AddReduceMoney = () => {
     };
 
     try {
-      await push(ref(db, "payments"), newPayment);
+      // Save under:
+      // payments / Talha / date / paymentId
+      await push(ref(db, `payments/Talha/${date}`), newPayment);
+
       toast.success("✅ Transaction recorded successfully");
-      navigate("/talha"); // go back to Talha page
+      navigate("/talha");
     } catch (err) {
       console.error(err);
       toast.error("Error adding transaction");
