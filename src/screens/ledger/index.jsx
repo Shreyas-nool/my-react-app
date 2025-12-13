@@ -43,6 +43,9 @@ export default function Ledger() {
     return () => unsubscribe();
   }, []);
 
+  // ✅ Helper to format number to 2 decimals
+  const format2 = (num) => Number(num).toFixed(2);
+
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-1 sm:p-4 space-y-4">
       {/* Header */}
@@ -99,7 +102,7 @@ export default function Ledger() {
                         {party.openingBalance}
                       </TableCell>
 
-                      {/* Only balance used in calculations */}
+                      {/* Current balance formatted to 2 decimals */}
                       <TableCell
                         className={
                           party.balance >= 0
@@ -107,7 +110,7 @@ export default function Ledger() {
                             : "text-red-600 font-semibold"
                         }
                       >
-                        {party.balance}
+                        {format2(party.balance)}
                       </TableCell>
                     </TableRow>
                   ))}

@@ -30,6 +30,9 @@ const SalesScreen = () => {
     direction: "asc",
   });
 
+  // ✅ Round numbers to 2 decimals
+  const round2 = (num) => Math.round((Number(num) + Number.EPSILON) * 100) / 100;
+
   useEffect(() => {
     const salesRef = ref(db, "sales");
     const unsubscribe = onValue(salesRef, (snapshot) => {
@@ -181,9 +184,11 @@ const SalesScreen = () => {
 
                   <TableBody>
                     {sortedSales.map((sale) => {
-                      const totalAmount = sale.items.reduce(
-                        (sum, item) => sum + item.total,
-                        0
+                      const totalAmount = round2(
+                        sale.items.reduce(
+                          (sum, item) => sum + Number(item.total || 0),
+                          0
+                        )
                       );
 
                       return (
@@ -205,7 +210,7 @@ const SalesScreen = () => {
 
                           <TableCell>{sale.party}</TableCell>
 
-                          <TableCell>{totalAmount}</TableCell>
+                          <TableCell>{totalAmount.toFixed(2)}</TableCell>
 
                           <TableCell>
                             <button

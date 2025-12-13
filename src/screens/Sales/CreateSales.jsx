@@ -8,7 +8,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, ChevronsUpDown, Check, Trash2 } from "lucide-react";
 import { db } from "../../firebase";
-import { ref, push, set, onValue, runTransaction } from "firebase/database";
+import { ref, set, onValue, runTransaction } from "firebase/database";
 import { cn } from "../../lib/utils";
 
 // Format ISO with date & time
@@ -23,6 +23,9 @@ const formatToISO = (dateObj) => {
   return `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}`;
 };
 
+// Round to 2 decimals safely
+const round2 = (num) => Math.round((Number(num) + Number.EPSILON) * 100) / 100;
+
 const SalesInvoice = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -31,7 +34,6 @@ const SalesInvoice = () => {
   const [stocks, setStocks] = useState([]);
   const [parties, setParties] = useState([]);
   const [selectedParty, setSelectedParty] = useState("");
-  const [creditPeriod, setCreditPeriod] = useState("");
   const [selectedStock, setSelectedStock] = useState(null);
   const [productOpen, setProductOpen] = useState(false);
   const [box, setBox] = useState("");
@@ -73,11 +75,8 @@ const SalesInvoice = () => {
       setItems(invoiceToEdit.items || []);
       setSubtotal(invoiceToEdit.subtotal || invoiceToEdit.total || 0);
       setCreatedAt(invoiceToEdit.createdAt ? new Date(invoiceToEdit.createdAt) : new Date());
-
-      const selected = parties.find((p) => p.name === invoiceToEdit.party);
-      setCreditPeriod(selected?.creditPeriod || "");
     }
-  }, [invoiceToEdit, parties]);
+  }, [invoiceToEdit]);
 
   const handleSelectStock = (stock) => {
     setSelectedStock(stock);
@@ -89,8 +88,7 @@ const SalesInvoice = () => {
   };
 
   const handleBoxChange = (value) => {
-    if (!selectedStock) return;
-    if (value < 0) return;
+    if (!selectedStock || value < 0) return;
 
     const totalStockPieces = (Number(selectedStock.boxes) || 0) * (Number(selectedStock.piecesPerBox) || 1);
     const desiredPieces = value * (Number(selectedStock.piecesPerBox) || 1);
@@ -117,7 +115,8 @@ const SalesInvoice = () => {
       return alert(`Cannot add! Only ${totalStockPieces} pieces available in stock.`);
     }
 
-    const totalItem = Number(box) * Number(piecesPerBox) * Number(pricePerItem);
+    const quantity = Number(box) * Number(piecesPerBox);
+    const totalItem = round2(quantity * Number(pricePerItem));
 
     const newItem = {
       party: selectedParty,
@@ -125,14 +124,14 @@ const SalesInvoice = () => {
       category: selectedStock.category,
       box: Number(box),
       piecesPerBox: Number(piecesPerBox),
-      pricePerItem: Number(pricePerItem),
+      pricePerItem, // keep exact value entered
       total: totalItem,
       stockId: selectedStock.id,
       dateKey: selectedStock.dateKey,
     };
 
     setItems([...items, newItem]);
-    setSubtotal((prev) => prev + totalItem);
+    setSubtotal((prev) => round2(prev + totalItem));
     setSelectedStock(null);
     setBox("");
     setPiecesPerBox("");
@@ -143,22 +142,17 @@ const SalesInvoice = () => {
   const handleDeleteItem = (index) => {
     const itemToDelete = items[index];
     setItems(items.filter((_, i) => i !== index));
-    setSubtotal((prev) => prev - (Number(itemToDelete.total) || 0));
+    setSubtotal((prev) => round2(prev - (Number(itemToDelete.total) || 0)));
   };
 
   const updateStockAfterSale = async (saleItems) => {
     for (const item of saleItems) {
       const stockRef = ref(db, `stocks/${item.dateKey}/${item.stockId}`);
-
       await runTransaction(stockRef, (current) => {
         if (!current) return current;
 
-        let totalPiecesStock =
-          (Number(current.boxes) || 0) * (Number(current.piecesPerBox) || 1);
-
-        const soldPieces =
-          (Number(item.box) || 0) * (Number(item.piecesPerBox) || 0);
-
+        let totalPiecesStock = (Number(current.boxes) || 0) * (Number(current.piecesPerBox) || 1);
+        const soldPieces = (Number(item.box) || 0) * (Number(item.piecesPerBox) || 0);
         totalPiecesStock -= soldPieces;
 
         const updatedBoxes = Math.floor(totalPiecesStock / (Number(current.piecesPerBox) || 1));
@@ -191,7 +185,6 @@ const SalesInvoice = () => {
       const saleData = {
         createdAt: isoDateTime,
         party: selectedParty,
-        creditPeriod,
         items,
         subtotal,
         total: subtotal,
@@ -227,20 +220,14 @@ const SalesInvoice = () => {
         <div className="w-8" />
       </header>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium">Party</label>
           <select
             value={selectedParty}
             disabled={items.length > 0}
-            onChange={(e) => {
-              setSelectedParty(e.target.value);
-              const selected = parties.find((p) => p.name === e.target.value);
-              setCreditPeriod(selected?.creditPeriod || "");
-            }}
-            className={`w-full border border-slate-300 rounded-lg px-3 py-2 text-sm ${
-              items.length > 0 ? "bg-gray-200 cursor-not-allowed" : ""
-            }`}
+            onChange={(e) => setSelectedParty(e.target.value)}
+            className={`w-full border border-slate-300 rounded-lg px-3 py-2 text-sm ${items.length > 0 ? "bg-gray-200 cursor-not-allowed" : ""}`}
           >
             <option value="">-- Choose Party --</option>
             {parties.map((p, i) => (
@@ -261,16 +248,6 @@ const SalesInvoice = () => {
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
           />
         </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium">Credit Period (Days)</label>
-          <Input
-            type="number"
-            value={creditPeriod}
-            onChange={(e) => setCreditPeriod(e.target.value)}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-          />
-        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-6 gap-4 mt-4">
@@ -287,9 +264,7 @@ const SalesInvoice = () => {
               <Command>
                 <CommandInput placeholder="Search product..." onValueChange={setSearchText} />
                 <CommandList>
-                  {searchText.length < 2 && (
-                    <div className="p-2 text-sm text-red-500">Enter at least 2 characters to search.</div>
-                  )}
+                  {searchText.length < 2 && <div className="p-2 text-sm text-red-500">Enter at least 2 characters to search.</div>}
                   <CommandEmpty>No product found.</CommandEmpty>
                   {searchText.length >= 2 &&
                     stocks
@@ -358,7 +333,7 @@ const SalesInvoice = () => {
                   <td className="border p-2 text-center">{item.box}</td>
                   <td className="border p-2 text-center">{item.piecesPerBox}</td>
                   <td className="border p-2 text-right">{item.pricePerItem}</td>
-                  <td className="border p-2 text-right">{item.total}</td>
+                  <td className="border p-2 text-right">{item.total.toFixed(2)}</td>
                   <td className="border p-2 text-center">
                     <Button variant="destructive" size="sm" onClick={() => handleDeleteItem(i)}>
                       <Trash2 className="h-4 w-4" />
@@ -373,7 +348,7 @@ const SalesInvoice = () => {
                 <td className="border p-2" />
                 <td className="border p-2 text-center">{totalBoxes}</td>
                 <td className="border p-2 text-center">{totalPieces}</td>
-                <td colSpan="3" className="border p-2 text-right">{subtotal}</td>
+                <td colSpan="3" className="border p-2 text-right">{subtotal.toFixed(2)}</td>
               </tr>
             )}
           </tbody>

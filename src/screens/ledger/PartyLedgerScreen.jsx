@@ -12,6 +12,9 @@ const PartyLedgerScreen = () => {
   });
   const [loading, setLoading] = useState(true);
 
+  // ✅ Round to 2 decimals
+  const round2 = (num) => Math.round((Number(num) + Number.EPSILON) * 100) / 100;
+
   useEffect(() => {
     const fetchAndUpdateSummary = async () => {
       setLoading(true);
@@ -19,7 +22,7 @@ const PartyLedgerScreen = () => {
         const partySnap = await get(ref(db, `parties/${id}`));
         const partyObj = partySnap.val();
         const partyName = partyObj?.name || id;
-        const openingBalance = Number(partyObj?.openingBalance || 0);
+        const openingBalance = round2(Number(partyObj?.openingBalance || 0));
 
         const transactions = [];
 
@@ -29,12 +32,12 @@ const PartyLedgerScreen = () => {
         Object.values(sales).forEach((sale) => {
           Object.values(sale).forEach((inv) => {
             if (inv.party === partyName) {
-              const total = inv.items?.reduce((sum, i) => sum + (i.total || 0), 0);
+              const total = round2(inv.items?.reduce((sum, i) => sum + Number(i.total || 0), 0));
               transactions.push({
                 type: "Sale",
                 date: inv.createdAt || inv.date,
                 invoice: inv.invoiceNumber || inv.invoice,
-                debit: total || 0,
+                debit: total,
                 credit: 0,
                 notes: "",
               });
@@ -52,7 +55,7 @@ const PartyLedgerScreen = () => {
               date: purchase.createdAt || purchase.date,
               invoice: purchase.invoiceNumber || purchase.id,
               debit: 0,
-              credit: purchase.total || purchase.subtotal || 0,
+              credit: round2(purchase.total || purchase.subtotal || 0),
               notes: purchase.notes || "",
             });
           }
@@ -64,7 +67,7 @@ const PartyLedgerScreen = () => {
         if (allPayments[partyName]) {
           Object.entries(allPayments[partyName]).forEach(([dateKey, paymentNode]) => {
             Object.values(paymentNode).forEach((payment) => {
-              const amt = Number(payment.amount || 0);
+              const amt = round2(Number(payment.amount || 0));
               transactions.push({
                 type: "Payment",
                 date: payment.createdAt || payment.date || dateKey,
@@ -80,21 +83,21 @@ const PartyLedgerScreen = () => {
         // Sort by full timestamp → oldest first
         transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-        // Compute running balance (start from 0, ignore opening balance)
+        // Compute running balance
         let runningBalance = 0;
         let totalDebit = 0;
         let totalCredit = 0;
 
         const ledgerEntries = transactions.map((t) => {
-          totalDebit += t.debit || 0;
-          totalCredit += t.credit || 0;
-          runningBalance = runningBalance + (t.debit || 0) - (t.credit || 0);
+          totalDebit = round2(totalDebit + (t.debit || 0));
+          totalCredit = round2(totalCredit + (t.credit || 0));
+          runningBalance = round2(runningBalance + (t.debit || 0) - (t.credit || 0));
           return { ...t, runningBalance };
         });
 
         setLedgerData({
           partyName,
-          openingBalance, // purely display
+          openingBalance,
           transactions: ledgerEntries,
         });
 
@@ -104,10 +107,10 @@ const PartyLedgerScreen = () => {
           partyId: id,
           partyName,
           date: today,
-          openingBalance, // still stored as reference
+          openingBalance,
           totalDebit,
           totalCredit,
-          balance: runningBalance, // balance ignores openingBalance
+          balance: runningBalance,
         });
 
         // Update party balance
@@ -133,7 +136,7 @@ const PartyLedgerScreen = () => {
           ledgerData.openingBalance > 0 ? "text-red-600" : "text-green-600"
         }`}
       >
-        Opening Balance: {ledgerData.openingBalance}
+        Opening Balance: {ledgerData.openingBalance.toFixed(2)}
       </div>
 
       <div className="overflow-auto bg-white rounded shadow">
@@ -157,14 +160,14 @@ const PartyLedgerScreen = () => {
                 <td className="p-2 capitalize">{t.type}</td>
                 <td className="p-2">{t.invoice}</td>
                 <td className="p-2">{t.notes}</td>
-                <td className="p-2 text-right text-red-600">{t.debit || ""}</td>
-                <td className="p-2 text-right text-green-600">{t.credit || ""}</td>
+                <td className="p-2 text-right text-red-600">{t.debit?.toFixed(2) || ""}</td>
+                <td className="p-2 text-right text-green-600">{t.credit?.toFixed(2) || ""}</td>
                 <td
                   className={`p-2 text-right font-semibold ${
                     t.runningBalance > 0 ? "text-red-600" : "text-green-600"
                   }`}
                 >
-                  {t.runningBalance}
+                  {t.runningBalance.toFixed(2)}
                 </td>
               </tr>
             ))}
