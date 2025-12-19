@@ -26,12 +26,25 @@ const SalesScreen = () => {
   const [searchQuery, setSearchQuery] = useState("");
 
   const [sortConfig, setSortConfig] = useState({
-    key: null,
-    direction: "asc",
+    key: "createdAt",
+    direction: "desc", // Latest invoice on top by default
   });
 
-  // ✅ Round numbers to 2 decimals
+  // Round numbers to 2 decimals
   const round2 = (num) => Math.round((Number(num) + Number.EPSILON) * 100) / 100;
+
+  // Format ISO datetime to "dd-mm-yy hh:mm"
+  const formatDateTime = (isoString) => {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    const dd = String(date.getDate()).padStart(2, "0");
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const yy = String(date.getFullYear()).slice(-2);
+    const hh = String(date.getHours()).padStart(2, "0");
+    const min = String(date.getMinutes()).padStart(2, "0");
+
+    return `${dd}-${mm}-${yy} ${hh}:${min}`;
+  };
 
   useEffect(() => {
     const salesRef = ref(db, "sales");
@@ -71,6 +84,7 @@ const SalesScreen = () => {
     let aValue = a[sortConfig.key];
     let bValue = b[sortConfig.key];
 
+    // Compare as timestamp if sorting by date
     if (sortConfig.key === "createdAt") {
       aValue = new Date(aValue).getTime();
       bValue = new Date(bValue).getTime();
@@ -122,7 +136,6 @@ const SalesScreen = () => {
 
         <div className="flex-1 text-center">
           <h1 className="text-lg sm:text-xl font-semibold">Sales List</h1>
-          <p className="text-xs text-muted-foreground">SR Enterprise</p>
         </div>
 
         <Button onClick={() => navigate("/sales/create-sales")}>
@@ -193,7 +206,7 @@ const SalesScreen = () => {
 
                       return (
                         <TableRow key={sale._invoiceKey}>
-                          <TableCell>{sale.createdAt}</TableCell>
+                          <TableCell>{formatDateTime(sale.createdAt)}</TableCell>
 
                           <TableCell>
                             <button

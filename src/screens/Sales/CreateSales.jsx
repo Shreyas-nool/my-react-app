@@ -34,8 +34,11 @@ const SalesInvoice = () => {
   const [stocks, setStocks] = useState([]);
   const [parties, setParties] = useState([]);
   const [selectedParty, setSelectedParty] = useState("");
+  const [partyOpen, setPartyOpen] = useState(false);
+
   const [selectedStock, setSelectedStock] = useState(null);
   const [productOpen, setProductOpen] = useState(false);
+
   const [box, setBox] = useState("");
   const [piecesPerBox, setPiecesPerBox] = useState("");
   const [pricePerItem, setPricePerItem] = useState("");
@@ -104,7 +107,7 @@ const SalesInvoice = () => {
   };
 
   const handleAddItem = () => {
-    if (!selectedStock || !box || !piecesPerBox || !pricePerItem) {
+    if (!selectedStock || !box || !piecesPerBox || pricePerItem === "") {
       return alert("Please fill all fields.");
     }
 
@@ -116,7 +119,8 @@ const SalesInvoice = () => {
     }
 
     const quantity = Number(box) * Number(piecesPerBox);
-    const totalItem = round2(quantity * Number(pricePerItem));
+    const price = parseFloat(pricePerItem);
+    const totalItem = round2(quantity * price);
 
     const newItem = {
       party: selectedParty,
@@ -124,7 +128,7 @@ const SalesInvoice = () => {
       category: selectedStock.category,
       box: Number(box),
       piecesPerBox: Number(piecesPerBox),
-      pricePerItem, // keep exact value entered
+      pricePerItem: price,
       total: totalItem,
       stockId: selectedStock.id,
       dateKey: selectedStock.dateKey,
@@ -132,6 +136,7 @@ const SalesInvoice = () => {
 
     setItems([...items, newItem]);
     setSubtotal((prev) => round2(prev + totalItem));
+
     setSelectedStock(null);
     setBox("");
     setPiecesPerBox("");
@@ -220,20 +225,45 @@ const SalesInvoice = () => {
         <div className="w-8" />
       </header>
 
+      {/* Party & Date */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium">Party</label>
-          <select
-            value={selectedParty}
-            disabled={items.length > 0}
-            onChange={(e) => setSelectedParty(e.target.value)}
-            className={`w-full border border-slate-300 rounded-lg px-3 py-2 text-sm ${items.length > 0 ? "bg-gray-200 cursor-not-allowed" : ""}`}
-          >
-            <option value="">-- Choose Party --</option>
-            {parties.map((p, i) => (
-              <option key={i} value={p.name}>{p.name}</option>
-            ))}
-          </select>
+          <Popover open={partyOpen} onOpenChange={setPartyOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={`w-full justify-between px-3 text-left ${items.length > 0 ? "bg-gray-200 cursor-not-allowed" : ""}`}
+                disabled={items.length > 0}
+              >
+                {selectedParty || "-- Choose Party --"}
+                <ChevronsUpDown className="h-4 w-4 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="p-0 w-[260px]">
+              <Command>
+                <CommandInput placeholder="Search party..." onValueChange={setSearchText} />
+                <CommandList>
+                  <CommandEmpty>No party found.</CommandEmpty>
+                  {parties
+                    .filter((p) => p.name.toLowerCase().includes(searchText.toLowerCase()))
+                    .map((p, i) => (
+                      <CommandItem
+                        key={i}
+                        value={p.name}
+                        onSelect={() => {
+                          setSelectedParty(p.name);
+                          setPartyOpen(false);
+                        }}
+                      >
+                        <Check className={cn("mr-2 h-4 w-4", selectedParty === p.name ? "opacity-100" : "opacity-0")} />
+                        {p.name}
+                      </CommandItem>
+                    ))}
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
 
         <div className="flex flex-col gap-1">
@@ -250,6 +280,7 @@ const SalesInvoice = () => {
         </div>
       </div>
 
+      {/* Product Selection */}
       <div className="grid grid-cols-1 sm:grid-cols-6 gap-4 mt-4">
         <div className="sm:col-span-2 flex flex-col gap-1">
           <label className="text-sm font-medium">Product</label>
@@ -299,7 +330,12 @@ const SalesInvoice = () => {
 
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium">Price/Item</label>
-          <Input type="number" value={pricePerItem} onChange={(e) => setPricePerItem(Number(e.target.value))} />
+          <Input
+            type="number"
+            step="0.01"
+            value={pricePerItem}
+            onChange={(e) => setPricePerItem(e.target.value)}
+          />
         </div>
       </div>
 
@@ -307,11 +343,12 @@ const SalesInvoice = () => {
         <Button className="bg-primary" onClick={handleAddItem}>Add to Invoice</Button>
       </div>
 
+      {/* Items Table */}
       <div className="overflow-x-auto bg-white p-4 rounded-xl shadow-sm border mt-4">
-        <table className="w-full border text-sm">
+        <table className="w-full border text-sm text-center">
           <thead className="bg-gray-100">
             <tr>
-              <th className="border p-2">Sr</th>
+              <th className="border p-2">S.R</th>
               <th className="border p-2">Category</th>
               <th className="border p-2">Product</th>
               <th className="border p-2">Box</th>
@@ -330,11 +367,11 @@ const SalesInvoice = () => {
                   <td className="border p-2">{i + 1}</td>
                   <td className="border p-2">{item.category}</td>
                   <td className="border p-2">{item.productName}</td>
-                  <td className="border p-2 text-center">{item.box}</td>
-                  <td className="border p-2 text-center">{item.piecesPerBox}</td>
-                  <td className="border p-2 text-right">{item.pricePerItem}</td>
-                  <td className="border p-2 text-right">{item.total.toFixed(2)}</td>
-                  <td className="border p-2 text-center">
+                  <td className="border p-2">{item.box}</td>
+                  <td className="border p-2">{item.piecesPerBox}</td>
+                  <td className="border p-2">{Number(item.pricePerItem).toFixed(4)}</td>
+                  <td className="border p-2">{item.total.toFixed(2)}</td>
+                  <td className="border p-2">
                     <Button variant="destructive" size="sm" onClick={() => handleDeleteItem(i)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -344,11 +381,13 @@ const SalesInvoice = () => {
             )}
             {items.length > 0 && (
               <tr className="bg-gray-100 font-semibold">
-                <td colSpan="2" className="border p-2 text-right">Total</td>
-                <td className="border p-2" />
-                <td className="border p-2 text-center">{totalBoxes}</td>
-                <td className="border p-2 text-center">{totalPieces}</td>
-                <td colSpan="3" className="border p-2 text-right">{subtotal.toFixed(2)}</td>
+                <td colSpan="2" className="border p-2">{/* empty */}</td>
+                <td className="border p-2 text-right">Total:</td>
+                <td className="border p-2">{totalBoxes}</td>
+                <td className="border p-2">{/* empty */}</td>
+                <td className="border p-2 text-right">Grand Total:</td>
+                <td className="border p-2">{subtotal.toFixed(2)}</td>
+                <td className="border p-2">{/* empty */}</td>
               </tr>
             )}
           </tbody>

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { Plus, ArrowLeft, Trash2 } from "lucide-react";
 import { db } from "../../firebase";
-import { ref, onValue, remove } from "firebase/database";
+import { ref, onValue, remove, update } from "firebase/database";
 
 const ProductList = () => {
   const navigate = useNavigate();
@@ -34,13 +34,22 @@ const ProductList = () => {
     await remove(productRef);
   };
 
-  // Determine which dynamic columns exist
+  // Inline update handler
+  const handleInlineUpdate = async (id, field, value) => {
+    if (value === "" || value === "-" || value === undefined) return;
+
+    const productRef = ref(db, `products/${id}`);
+    await update(productRef, {
+      [field]: value,
+    });
+  };
+
+  // Determine dynamic columns
   const showPieces = products.some((p) => p.piecesPerBox !== undefined);
   const showCreated = products.some((p) => p.createdAt);
 
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
-      
       {/* Header */}
       <header className="flex items-center justify-between py-2 border-b border-border/50">
         <Button
@@ -72,8 +81,12 @@ const ProductList = () => {
             <tr className="bg-gray-100 text-sm sm:text-base">
               <th className="border p-2 text-left">Name</th>
               <th className="border p-2 text-left">Category</th>
-              {showPieces && <th className="border p-2 text-left">Pieces/Box</th>}
-              {showCreated && <th className="border p-2 text-left">Created On</th>}
+              {showPieces && (
+                <th className="border p-2 text-left">Pieces/Box</th>
+              )}
+              {showCreated && (
+                <th className="border p-2 text-left">Created On</th>
+              )}
               <th className="border p-2 text-center">Action</th>
             </tr>
           </thead>
@@ -81,30 +94,75 @@ const ProductList = () => {
           <tbody>
             {products.length === 0 ? (
               <tr>
-                <td colSpan={3 + (showPieces ? 1 : 0) + (showCreated ? 1 : 0)} className="text-center p-4">
+                <td
+                  colSpan={3 + (showPieces ? 1 : 0) + (showCreated ? 1 : 0)}
+                  className="text-center p-4"
+                >
                   No products added yet.
                 </td>
               </tr>
             ) : (
-              products.map((prod) => {
-                const rowCells = [
-                  <td key="name" className="border p-2">{prod.productName}</td>,
-                  <td key="category" className="border p-2">{prod.category}</td>
-                ];
+              products.map((prod) => (
+                <tr
+                  key={prod.id}
+                  className="hover:bg-gray-50 text-sm sm:text-base"
+                >
+                  {/* Editable Name */}
+                  <td
+                    className="border p-2 cursor-text hover:bg-yellow-50 focus:bg-yellow-50 outline-none"
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={(e) =>
+                      handleInlineUpdate(
+                        prod.id,
+                        "productName",
+                        e.target.innerText.trim()
+                      )
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        e.currentTarget.blur();
+                      }
+                    }}
+                  >
+                    {prod.productName}
+                  </td>
 
-                if (showPieces) {
-                  rowCells.push(
-                    <td key="pieces" className="border p-2">{prod.piecesPerBox ?? "-"}</td>
-                  );
-                }
-                if (showCreated) {
-                  rowCells.push(
-                    <td key="created" className="border p-2">{prod.createdAt ?? "-"}</td>
-                  );
-                }
+                  {/* Read-only Category */}
+                  <td className="border p-2">{prod.category}</td>
 
-                rowCells.push(
-                  <td key="action" className="border p-2 text-center">
+                  {/* Editable Pieces */}
+                  {showPieces && (
+                    <td
+                      className="border p-2 cursor-text hover:bg-yellow-50 focus:bg-yellow-50 outline-none"
+                      contentEditable
+                      suppressContentEditableWarning
+                      onBlur={(e) =>
+                        handleInlineUpdate(
+                          prod.id,
+                          "piecesPerBox",
+                          Number(e.target.innerText.trim())
+                        )
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          e.currentTarget.blur();
+                        }
+                      }}
+                    >
+                      {prod.piecesPerBox ?? "-"}
+                    </td>
+                  )}
+
+                  {/* Created Date */}
+                  {showCreated && (
+                    <td className="border p-2">{prod.createdAt ?? "-"}</td>
+                  )}
+
+                  {/* Delete */}
+                  <td className="border p-2 text-center">
                     <Button
                       variant="destructive"
                       size="sm"
@@ -114,14 +172,8 @@ const ProductList = () => {
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </td>
-                );
-
-                return (
-                  <tr key={prod.id} className="hover:bg-gray-50 text-sm sm:text-base">
-                    {rowCells}
-                  </tr>
-                );
-              })
+                </tr>
+              ))
             )}
           </tbody>
         </table>

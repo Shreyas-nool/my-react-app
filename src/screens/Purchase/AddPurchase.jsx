@@ -181,7 +181,7 @@ const AddPurchase = () => {
             <Popover open={productOpen} onOpenChange={setProductOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="w-full justify-between px-3">
-                  {selectedStock?.productName || "Select Stock Item"}
+                  {selectedStock?.productName || "Select Product"}
                   <ChevronsUpDown className="h-4 w-4 opacity-50" />
                 </Button>
               </PopoverTrigger>
