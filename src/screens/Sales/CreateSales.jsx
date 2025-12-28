@@ -8,7 +8,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, ChevronsUpDown, Check, Trash2 } from "lucide-react";
 import { db } from "../../firebase";
-import { ref, set, onValue, runTransaction } from "firebase/database";
+import { ref, set, runTransaction, onValue} from "firebase/database";
 import { cn } from "../../lib/utils";
 
 // Format ISO with date & time
@@ -246,7 +246,7 @@ const SalesInvoice = () => {
                 <CommandList>
                   <CommandEmpty>No party found.</CommandEmpty>
                   {parties
-                    .filter((p) => p.name.toLowerCase().includes(searchText.toLowerCase()))
+                    .filter((p) => (p?.name || "").toLowerCase().includes((searchText || "").toLowerCase()))
                     .map((p, i) => (
                       <CommandItem
                         key={i}
@@ -259,7 +259,7 @@ const SalesInvoice = () => {
                         <Check className={cn("mr-2 h-4 w-4", selectedParty === p.name ? "opacity-100" : "opacity-0")} />
                         {p.name}
                       </CommandItem>
-                    ))}
+                  ))}
                 </CommandList>
               </Command>
             </PopoverContent>
@@ -299,7 +299,7 @@ const SalesInvoice = () => {
                   <CommandEmpty>No product found.</CommandEmpty>
                   {searchText.length >= 2 &&
                     stocks
-                      .filter((s) => s.productName.toLowerCase().includes(searchText.toLowerCase()))
+                      .filter((s) => (s?.productName || "").toLowerCase().includes((searchText || "").toLowerCase()))
                       .map((s) => (
                         <CommandItem key={s.id} value={s.productName} onSelect={() => handleSelectStock(s)}>
                           <Check className={cn("mr-2 h-4 w-4", selectedStock?.id === s.id ? "opacity-100" : "opacity-0")} />

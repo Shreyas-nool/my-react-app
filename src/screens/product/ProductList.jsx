@@ -44,9 +44,15 @@ const ProductList = () => {
     });
   };
 
-  // Determine dynamic columns
-  const showPieces = products.some((p) => p.piecesPerBox !== undefined);
-  const showCreated = products.some((p) => p.createdAt);
+  // Format date to DD-M-YY
+  const formatDate = (dateString) => {
+    if (!dateString) return "-";
+    const date = new Date(dateString);
+    const dd = String(date.getDate()).padStart(2, "0");
+    const mm = String(date.getMonth() + 1); // no leading zero
+    const yy = String(date.getFullYear()).slice(-2);
+    return `${dd}-${mm}-${yy}`;
+  };
 
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
@@ -76,28 +82,22 @@ const ProductList = () => {
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full table-auto border border-gray-300">
+        <table className="w-full table-auto border border-gray-300 text-center">
           <thead>
             <tr className="bg-gray-100 text-sm sm:text-base">
-              <th className="border p-2 text-left">Name</th>
-              <th className="border p-2 text-left">Category</th>
-              {showPieces && (
-                <th className="border p-2 text-left">Pieces/Box</th>
-              )}
-              {showCreated && (
-                <th className="border p-2 text-left">Created On</th>
-              )}
-              <th className="border p-2 text-center">Action</th>
+              <th className="border p-2">Name</th>
+              <th className="border p-2">Category</th>
+              <th className="border p-2">Pieces/Box</th>
+              <th className="border p-2">Created On</th>
+              <th className="border p-2">Notes</th>
+              <th className="border p-2">Action</th>
             </tr>
           </thead>
 
           <tbody>
             {products.length === 0 ? (
               <tr>
-                <td
-                  colSpan={3 + (showPieces ? 1 : 0) + (showCreated ? 1 : 0)}
-                  className="text-center p-4"
-                >
+                <td colSpan={6} className="text-center p-4">
                   No products added yet.
                 </td>
               </tr>
@@ -113,11 +113,7 @@ const ProductList = () => {
                     contentEditable
                     suppressContentEditableWarning
                     onBlur={(e) =>
-                      handleInlineUpdate(
-                        prod.id,
-                        "productName",
-                        e.target.innerText.trim()
-                      )
+                      handleInlineUpdate(prod.id, "productName", e.target.innerText.trim())
                     }
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -129,40 +125,54 @@ const ProductList = () => {
                     {prod.productName}
                   </td>
 
-                  {/* Read-only Category */}
+                  {/* Category */}
                   <td className="border p-2">{prod.category}</td>
 
                   {/* Editable Pieces */}
-                  {showPieces && (
-                    <td
-                      className="border p-2 cursor-text hover:bg-yellow-50 focus:bg-yellow-50 outline-none"
-                      contentEditable
-                      suppressContentEditableWarning
-                      onBlur={(e) =>
-                        handleInlineUpdate(
-                          prod.id,
-                          "piecesPerBox",
-                          Number(e.target.innerText.trim())
-                        )
+                  <td
+                    className="border p-2 cursor-text hover:bg-yellow-50 focus:bg-yellow-50 outline-none"
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={(e) =>
+                      handleInlineUpdate(
+                        prod.id,
+                        "piecesPerBox",
+                        Number(e.target.innerText.trim())
+                      )
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        e.currentTarget.blur();
                       }
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          e.currentTarget.blur();
-                        }
-                      }}
-                    >
-                      {prod.piecesPerBox ?? "-"}
-                    </td>
-                  )}
+                    }}
+                  >
+                    {prod.piecesPerBox ?? "-"}
+                  </td>
 
                   {/* Created Date */}
-                  {showCreated && (
-                    <td className="border p-2">{prod.createdAt ?? "-"}</td>
-                  )}
+                  <td className="border p-2">{formatDate(prod.createdAt)}</td>
+
+                  {/* Editable Notes */}
+                  <td
+                    className="border p-2 cursor-text hover:bg-yellow-50 focus:bg-yellow-50 outline-none"
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={(e) =>
+                      handleInlineUpdate(prod.id, "notes", e.target.innerText.trim())
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        e.currentTarget.blur();
+                      }
+                    }}
+                  >
+                    {prod.notes ?? "-"}
+                  </td>
 
                   {/* Delete */}
-                  <td className="border p-2 text-center">
+                  <td className="border p-2">
                     <Button
                       variant="destructive"
                       size="sm"

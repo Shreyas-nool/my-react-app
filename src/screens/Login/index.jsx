@@ -75,16 +75,13 @@ const LoginScreen = () => {
                     <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white drop-shadow-lg">
                         Welcome Back
                     </h1>
-                    <p className="text-gray-300 mt-2 text-xs sm:text-sm">
-                        Sign in to continue to your dashboard
-                    </p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
                     {/* Email Field */}
                     <div>
                         <label htmlFor="email" className="block text-sm font-medium text-gray-200 mb-1">
-                            Email
+                            User ID
                         </label>
                         <div className="relative">
                             <Mail className="absolute left-3 top-2.5 text-gray-400 h-5 w-5" />
@@ -94,7 +91,7 @@ const LoginScreen = () => {
                                 required
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                placeholder="Enter your email"
+                                placeholder="Enter your User ID"
                                 onClick={() => copyToClipboard(hardcodedUser.email)}
                                 className="w-full rounded-lg bg-white/20 border border-white/30 py-2.5 pl-10 pr-3 text-gray-100 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all text-sm sm:text-base cursor-pointer"
                             />

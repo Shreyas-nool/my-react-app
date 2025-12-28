@@ -41,11 +41,13 @@ const ProductEntry = () => {
 
   const [createdAt, setCreatedAt] = useState(new Date());
   const [notes, setNotes] = useState("");
-  const [piecesPerBox, setPiecesPerBox] = useState(0);
+  const [piecesPerBox, setPiecesPerBox] = useState(""); // Keep as string
 
+  // Add Category Popup
   const [showCatPopup, setShowCatPopup] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
 
+  // Edit Category Popup
   const [showEditPopup, setShowEditPopup] = useState(false);
   const [editCategoryId, setEditCategoryId] = useState(null);
   const [editCategoryName, setEditCategoryName] = useState("");
@@ -66,7 +68,7 @@ const ProductEntry = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!productName || !categoryId || piecesPerBox < 1) {
+    if (!productName || !categoryId || Number(piecesPerBox) < 1) {
       alert("Please fill all required fields correctly");
       return;
     }
@@ -83,12 +85,13 @@ const ProductEntry = () => {
 
     alert("Product added successfully");
 
+    // Reset all fields
     setProductName("");
     setCategory("");
     setCategoryId("");
     setNotes("");
     setCreatedAt(new Date());
-    setPiecesPerBox(0);
+    setPiecesPerBox("");
   };
 
   return (
@@ -105,7 +108,7 @@ const ProductEntry = () => {
         <div className="w-9" />
       </header>
 
-      {/* FORM */}
+      {/* Form */}
       <form
         onSubmit={handleSubmit}
         className="bg-white p-6 rounded-lg shadow space-y-6"
@@ -212,7 +215,7 @@ const ProductEntry = () => {
               type="number"
               min="1"
               value={piecesPerBox}
-              onChange={(e) => setPiecesPerBox(Number(e.target.value))}
+              onChange={(e) => setPiecesPerBox(e.target.value)} // keep as string
               className="w-full h-10 border rounded px-3"
               required
             />
@@ -223,7 +226,6 @@ const ProductEntry = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="text-sm font-medium">Created On</label>
-
             <div className="relative">
               <DatePicker
                 selected={createdAt}
@@ -234,7 +236,6 @@ const ProductEntry = () => {
               />
             </div>
           </div>
-
 
           <div>
             <label className="text-sm font-medium">Notes</label>
@@ -253,6 +254,94 @@ const ProductEntry = () => {
           </Button>
         </div>
       </form>
+
+      {/* Add Category Popup */}
+      {showCatPopup && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/30 z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-80">
+            <h2 className="text-lg font-semibold mb-4">Add New Category</h2>
+
+            <input
+              type="text"
+              placeholder="Category name"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              className="w-full border rounded px-3 py-2 mb-4"
+            />
+
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowCatPopup(false);
+                  setNewCategoryName("");
+                }}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                onClick={async () => {
+                  if (!newCategoryName.trim()) {
+                    alert("Enter category name");
+                    return;
+                  }
+
+                  const catRef = ref(db, "categories");
+                  await push(catRef, { name: newCategoryName.trim() });
+
+                  setShowCatPopup(false);
+                  setNewCategoryName("");
+                }}
+              >
+                Add
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Category Popup */}
+      {showEditPopup && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/30 z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-80">
+            <h2 className="text-lg font-semibold mb-4">Edit Category</h2>
+
+            <input
+              type="text"
+              value={editCategoryName}
+              onChange={(e) => setEditCategoryName(e.target.value)}
+              className="w-full border rounded px-3 py-2 mb-4"
+            />
+
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowEditPopup(false)}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                onClick={async () => {
+                  if (!editCategoryName.trim()) {
+                    alert("Enter category name");
+                    return;
+                  }
+
+                  await update(ref(db, `categories/${editCategoryId}`), {
+                    name: editCategoryName.trim(),
+                  });
+
+                  setShowEditPopup(false);
+                }}
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

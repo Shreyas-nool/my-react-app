@@ -2,18 +2,13 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Plus } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from "../../components/ui/card";
-
+import { Card, CardHeader, CardTitle, CardContent } from "../../components/ui/card";
 import { getDatabase, ref, onValue } from "firebase/database";
 
 export default function PaymentScreen() {
   const navigate = useNavigate();
   const [payments, setPayments] = useState([]);
+  const [filterDate, setFilterDate] = useState("");
 
   useEffect(() => {
     const db = getDatabase();
@@ -28,96 +23,111 @@ export default function PaymentScreen() {
       const data = snapshot.val();
       let list = [];
 
-      // Iterate: party → date → individual payment
       Object.keys(data).forEach((party) => {
         Object.keys(data[party]).forEach((date) => {
-          const paymentsOnDate = data[party][date];
-          Object.keys(paymentsOnDate).forEach((paymentKey) => {
-            const payment = paymentsOnDate[paymentKey];
+          Object.keys(data[party][date]).forEach((key) => {
+            const p = data[party][date][key];
+
             list.push({
-              id: `${party}_${date}_${paymentKey}`,
+              id: key,
               date,
-              party,
-              amount: payment.amount,
-              bank: payment.bank,
-              createdAt: payment.createdAt || "",
+              from: p.fromName,
+              to: p.toName,
+              amount: Number(p.amount).toFixed(2),
+              note: p.note || "-",
+              createdAt: p.createdAt || "",
+              type: `${p.fromType?.[0]?.toUpperCase() || "?"} - ${
+                p.toType?.[0]?.toUpperCase() || "?"
+              }`,
             });
           });
         });
       });
 
-      // Sort by date descending
-      list.sort((a, b) => new Date(b.date) - new Date(a.date));
-
+      list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       setPayments(list);
     });
 
     return () => unsubscribe();
   }, []);
 
+  const formatDate = (d) => {
+    if (!d) return "-";
+    const date = new Date(d);
+    return `${date.getDate().toString().padStart(2, "0")}/${
+      (date.getMonth() + 1).toString().padStart(2, "0")
+    }/${date.getFullYear()}`;
+  };
+
+  const filteredPayments = filterDate
+    ? payments.filter((p) => p.date === filterDate)
+    : payments;
+
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-2 sm:p-4 space-y-4 overflow-hidden">
 
       {/* HEADER */}
-      <header className="flex items-center justify-between py-2 border-b border-border/50">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate("/")}
-          className="h-8 w-8 sm:h-9 sm:w-9 p-0 sm:p-2 hover:bg-accent"
-        >
+      <header className="flex items-center justify-between py-2 border-b">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
 
-        <div className="flex-1 text-center">
-          <h1 className="text-lg sm:text-xl font-semibold">Payments</h1>
-          <p className="text-xs text-muted-foreground">SR Enterprise</p>
-        </div>
+        <h1 className="text-lg sm:text-xl font-semibold">Payments</h1>
 
         <Button
           onClick={() => navigate("/payment/add")}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-1.5 rounded-md"
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
         >
           <Plus className="h-4 w-4" />
-          <span className="hidden sm:block">Add Payment</span>
+          <span className="hidden sm:block">Add</span>
         </Button>
       </header>
 
-      {/* PAYMENT TABLE */}
+      {/* FILTER */}
+      <div className="flex justify-end">
+        <input
+          type="date"
+          className="border rounded px-3 py-1 text-sm"
+          value={filterDate}
+          onChange={(e) => setFilterDate(e.target.value)}
+        />
+      </div>
+
+      {/* TABLE */}
       <main className="flex-1 overflow-y-auto">
-        <Card className="max-w-7xl mx-auto">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-base sm:text-lg font-semibold">
-              Payment Records
-            </CardTitle>
+            <CardTitle>Payment Records</CardTitle>
           </CardHeader>
 
-          <CardContent className="p-4 sm:p-6">
-            {payments.length === 0 ? (
+          <CardContent>
+            {filteredPayments.length === 0 ? (
               <div className="text-center text-muted-foreground py-6">
                 No payments found.
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-muted uppercase text-xs">
+                <table className="min-w-full border text-sm text-center">
+                  <thead className="bg-muted text-xs uppercase">
                     <tr>
-                      <th className="px-4 py-3">#</th>
-                      <th className="px-4 py-3">Date</th>
-                      <th className="px-4 py-3">Party</th>
-                      <th className="px-4 py-3">Amount</th>
-                      <th className="px-4 py-3">Method</th>
+                      <th className="px-4 py-2">Date</th>
+                      <th className="px-4 py-2">From</th>
+                      <th className="px-4 py-2">To</th>
+                      <th className="px-4 py-2">Type</th>
+                      <th className="px-4 py-2">Amount</th>
+                      <th className="px-4 py-2">Notes</th>
                     </tr>
                   </thead>
 
                   <tbody>
-                    {payments.map((p, index) => (
-                      <tr key={p.id} className="border-b hover:bg-accent/40">
-                        <td className="px-4 py-3">{index + 1}</td>
-                        <td className="px-4 py-3">{p.date}</td>
-                        <td className="px-4 py-3">{p.party}</td>
-                        <td className="px-4 py-3">{p.amount}</td>
-                        <td className="px-4 py-3">{p.bank}</td>
+                    {filteredPayments.map((p) => (
+                      <tr key={p.id} className="border-b hover:bg-muted/40">
+                        <td className="px-4 py-2">{formatDate(p.date)}</td>
+                        <td className="px-4 py-2">{p.from}</td>
+                        <td className="px-4 py-2">{p.to}</td>
+                        <td className="px-4 py-2 font-medium">{p.type}</td>
+                        <td className="px-4 py-2 font-semibold">{p.amount}</td>
+                        <td className="px-4 py-2">{p.note}</td>
                       </tr>
                     ))}
                   </tbody>

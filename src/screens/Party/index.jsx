@@ -1,4 +1,4 @@
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Plus, ArrowUpDown } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { useNavigate } from "react-router-dom";
 import {
@@ -17,116 +17,142 @@ import {
 } from "../../components/ui/table";
 import { useEffect, useState } from "react";
 
-// 🧩 Firebase imports
+// 🔹 Firebase
 import { db } from "../../firebase";
 import { ref, onValue } from "firebase/database";
 
 const Party = () => {
   const navigate = useNavigate();
   const [parties, setParties] = useState([]);
+  const [search, setSearch] = useState("");
+  const [sortOrder, setSortOrder] = useState("asc"); // asc | desc
 
-  // 🔹 Load parties from Firebase Realtime Database
+  // 🔹 Load parties
   useEffect(() => {
     const partiesRef = ref(db, "parties");
 
     const unsubscribe = onValue(partiesRef, (snapshot) => {
       const data = snapshot.val();
-      if (data) {
-        const partyList = Object.values(data);
-        setParties(partyList);
-      } else {
-        setParties([]);
-      }
+      setParties(data ? Object.values(data) : []);
     });
 
     return () => unsubscribe();
   }, []);
 
+  // 🔹 Search filter
+  const filteredParties = parties.filter((p) => {
+    const q = search.toLowerCase();
+    return (
+      p.name?.toLowerCase().includes(q) ||
+      p.mobile?.toLowerCase().includes(q) ||
+      p.city?.toLowerCase().includes(q)
+    );
+  });
+
+  // 🔹 Sort by Party Name
+  const sortedParties = [...filteredParties].sort((a, b) => {
+    const nameA = a.name?.toLowerCase() || "";
+    const nameB = b.name?.toLowerCase() || "";
+    return sortOrder === "asc"
+      ? nameA.localeCompare(nameB)
+      : nameB.localeCompare(nameA);
+  });
+
   return (
-    <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-1 sm:p-4 space-y-2 sm:space-y-4 overflow-hidden">
+    <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen p-4 space-y-4 overflow-hidden">
 
       {/* Header */}
-      <header className="flex items-center justify-between py-2 sm:py-3 border-b border-border/50">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate("/")}
-          className="h-8 w-8 sm:h-9 sm:w-9 p-0 sm:p-2 hover:bg-accent"
-        >
+      <header className="flex items-center justify-between border-b pb-2">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
 
-        <div className="flex-1 text-center">
-          <h1 className="text-lg sm:text-xl font-semibold text-foreground/90">
-            Parties
-          </h1>
-        </div>
+        <h1 className="text-lg font-semibold">Parties</h1>
 
-        <Button
-          onClick={() => navigate("/party/add-party")}
-          className="h-8 sm:h-9 text-sm font-medium bg-primary hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add New Party
+        <Button onClick={() => navigate("/party/add-party")}>
+          <Plus className="h-4 w-4 mr-1" /> Add Party
         </Button>
       </header>
 
+      {/* Search + Sort */}
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+        <input
+          type="text"
+          placeholder="Search by name, mobile or city..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="border rounded-md px-3 py-2 text-sm w-full sm:w-1/3"
+        />
+
+        <Button
+          variant="outline"
+          className="flex items-center gap-2"
+          onClick={() =>
+            setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
+          }
+        >
+          <ArrowUpDown className="h-4 w-4" />
+          {sortOrder === "asc" ? "A → Z" : "Z → A"}
+        </Button>
+      </div>
+
+      {/* Table */}
       <main className="flex-1 overflow-y-auto">
-        <Card className="max-w-7xl mx-auto">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-base sm:text-lg font-semibold">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base font-semibold">
               All Parties
             </CardTitle>
           </CardHeader>
 
-          <CardContent className="space-y-4 p-4 sm:p-6">
+          <CardContent className="p-4">
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="border text-center">
                 <TableHeader>
-                  <TableRow>
-
-                    <TableHead className="w-[150px] text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                  <TableRow className="bg-gray-100">
+                    <TableHead className="font-semibold text-center">
                       Party Name
                     </TableHead>
-
-                    <TableHead className="w-[150px] text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                    <TableHead className="font-semibold text-center">
                       Mobile
                     </TableHead>
-
-                    <TableHead className="w-[150px] text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                    <TableHead className="font-semibold text-center">
                       City
                     </TableHead>
-
-                    <TableHead className="w-[150px] text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                    <TableHead className="font-semibold text-center">
                       Opening Balance
                     </TableHead>
-
-                    <TableHead className="w-[150px] text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                    <TableHead className="font-semibold text-center">
                       Party Type
                     </TableHead>
-
                   </TableRow>
                 </TableHeader>
 
                 <TableBody>
-                  {parties.length === 0 ? (
+                  {sortedParties.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center">
-                        No parties added yet.
+                      <TableCell colSpan={5} className="text-center py-6">
+                        No parties found.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    parties.map((party, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{party.name}</TableCell>
-
-                        <TableCell>{party.mobile || "-"}</TableCell>
-
-                        <TableCell>{party.city || "-"}</TableCell>
-
-                        <TableCell>{party.openingBalance || 0}</TableCell>
-
-                        <TableCell>{party.partyType}</TableCell>
+                    sortedParties.map((party, index) => (
+                      <TableRow key={index} className="hover:bg-gray-50">
+                        <TableCell className="text-center">
+                          {party.name}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {party.mobile || "-"}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {party.city || "-"}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {party.openingBalance || 0}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {party.partyType}
+                        </TableCell>
                       </TableRow>
                     ))
                   )}

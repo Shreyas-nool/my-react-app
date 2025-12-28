@@ -1,4 +1,4 @@
-// src/screens/talha/AddReduceMoney.jsx
+// src/screens/talha/AddPurchase.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
@@ -9,22 +9,21 @@ import { Textarea } from "../../components/ui/textarea";
 import { ArrowLeft, Plus } from "lucide-react";
 import { toast } from "react-toastify";
 
-const AddReduceMoney = () => {
+export default function AddPurchase() {
   const navigate = useNavigate();
 
-  const [amount, setAmount] = useState("");
-  const [type, setType] = useState("add");
-  const [notes, setNotes] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [amountINR, setAmountINR] = useState("");
+  const [notes, setNotes] = useState("");
   const [balance, setBalance] = useState(0);
 
   const CURRENT_BANK = "Talha";
 
   // --------------------------
-  // FIXED BALANCE FETCH LOGIC
+  // FETCH CURRENT BALANCE FROM PAYMENTS
   // --------------------------
   useEffect(() => {
-    const paymentsRef = ref(db, "payments");
+    const paymentsRef = ref(db, "phurchase/Talha");
 
     const unsubscribe = onValue(paymentsRef, (snapshot) => {
       const data = snapshot.val();
@@ -34,22 +33,13 @@ const AddReduceMoney = () => {
       }
 
       let total = 0;
+      Object.values(data).forEach((dateNode) => {
+        if (typeof dateNode !== "object") return;
 
-      // Traverse payments → party → date → paymentId
-      Object.values(data).forEach((partyNode) => {
-        if (typeof partyNode !== "object") return;
-
-        Object.values(partyNode).forEach((dateNode) => {
-          if (typeof dateNode !== "object") return;
-
-          Object.values(dateNode).forEach((payment) => {
-            if (
-              payment.bank === CURRENT_BANK + " - Online" &&
-              Number(payment.amount)
-            ) {
-              total += Number(payment.amount);
-            }
-          });
+        Object.values(dateNode).forEach((purchase) => {
+          if (Number(purchase.amountINR)) {
+            total += Number(purchase.amountINR);
+          }
         });
       });
 
@@ -65,32 +55,31 @@ const AddReduceMoney = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!amount || Number(amount) <= 0 || !date) {
-      toast.error("Please fill all required fields with valid values");
+    if (!amountINR || Number(amountINR) <= 0) {
+      toast.error("Please enter a valid INR amount");
       return;
     }
 
-    const adjustedAmount = type === "reduce" ? -Number(amount) : Number(amount);
-
-    const newPayment = {
-      party: type === "add" ? "Added to Talha" : "Reduced from Talha",
+    const newPurchase = {
+      party: "Talha Purchase",
       date,
       bank: CURRENT_BANK + " - Online",
-      amount: adjustedAmount,
+      amountINR: Number(amountINR),
       notes,
       createdAt: serverTimestamp(),
     };
 
     try {
-      // Save under:
-      // payments / Talha / date / paymentId
-      await push(ref(db, `payments/Talha/${date}`), newPayment);
+      // Get a reference to the date node
+      const dateRef = ref(db, `phurchase/Talha/${date}`);
+      // Push a new purchase under that date
+      await push(dateRef, newPurchase);
 
-      toast.success("✅ Transaction recorded successfully");
+      toast.success("✅ Purchase recorded successfully");
       navigate("/talha");
     } catch (err) {
       console.error(err);
-      toast.error("Error adding transaction");
+      toast.error("Error recording purchase");
     }
   };
 
@@ -106,9 +95,7 @@ const AddReduceMoney = () => {
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-lg font-semibold text-foreground/90">
-          Add / Reduce Money
-        </h1>
+        <h1 className="text-lg font-semibold text-foreground/90">Add Purchase</h1>
       </header>
 
       {/* Current Balance */}
@@ -131,28 +118,15 @@ const AddReduceMoney = () => {
           />
         </div>
 
-        {/* Amount */}
+        {/* Amount in INR */}
         <div className="flex flex-col space-y-2">
-          <label className="text-sm font-medium text-gray-700">Amount</label>
+          <label className="text-sm font-medium text-gray-700">Amount in INR</label>
           <Input
             type="number"
-            placeholder="Enter amount"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            placeholder="Enter amount in INR"
+            value={amountINR}
+            onChange={(e) => setAmountINR(e.target.value)}
           />
-        </div>
-
-        {/* Type */}
-        <div className="flex flex-col space-y-2">
-          <label className="text-sm font-medium text-gray-700">Type</label>
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-            className="w-full border rounded p-2"
-          >
-            <option value="add">Add Money</option>
-            <option value="reduce">Reduce Money</option>
-          </select>
         </div>
 
         {/* Notes */}
@@ -180,6 +154,4 @@ const AddReduceMoney = () => {
       </form>
     </div>
   );
-};
-
-export default AddReduceMoney;
+}

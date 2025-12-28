@@ -41,12 +41,9 @@ const HomeScreen = () => {
                 
                 {/* Header */}
                 <div className="pt-4 sm:pt-8 text-center sm:text-left">
-                    <h1 className="text-white text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight drop-shadow-md">
+                    <h1 className="text-white text-center text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight drop-shadow-md">
                         Dashboard
                     </h1>
-                    <p className="text-gray-300 mt-2 text-sm sm:text-base">
-                        Manage all your operations from one place.
-                    </p>
                 </div>
 
                 {/* Financial Overview */}

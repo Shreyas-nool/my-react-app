@@ -32,7 +32,6 @@ import ProfileScreen from "./screens/Profile";
 import Ledger from "./screens/ledger";
 import AddLedger from "./screens/ledger/AddLedger";
 import Purchase from "./screens/Purchase/Purchase";
-import AddPurchase from "./screens/Purchase/AddPurchase";
 import EditPurchase from "./screens/Purchase/EditPurchase";
 import PaymentScreen from "./screens/Payments/PaymentScreen";
 import AddPayment from "./screens/Payments/AddPayment";
@@ -52,7 +51,7 @@ import PartyLedgerScreen from "./screens/ledger/PartyLedgerScreen";
 
 import DueDateScreen from "./screens/dueDate/DueDateScreen";
 
-import AddReduceMoney from "./screens/talha/AddReduceMoney.jsx";
+import AddPurchase from "./screens/talha/AddPurchase";
 import TransferMoney from "./screens/talha/TransferMoney.jsx";
 
 import JrAddReduceMoney from "./screens/JR/JrAddReduceMoney";
@@ -60,6 +59,8 @@ import JrTransferMoney from "./screens/JR/JrTransferMoney";
 
 import SrAddReduceMoney from "./screens/SR/SrAddReduceMoney";
 import SrTransferMoney from "./screens/SR/SrTransferMoney";
+
+import BankDetails from "./screens/Bank/Bankdetails";
 
 // ✅ FULLY FIXED ROUTER
 const router = createBrowserRouter([
@@ -94,6 +95,7 @@ const router = createBrowserRouter([
           // Bank
           { path: "/banks", element: <Banks /> },
           { path: "/banks/add-bank", element: <AddBank /> },
+          { path: "/banks/:bankId", element: <BankDetails />},
 
           // Warehouse
           { path: "/warehouse", element: <WareHouse /> },
@@ -140,7 +142,7 @@ const router = createBrowserRouter([
           // Talha Bank Payments
           { path: "/talha", element: <TalhaBankPayments /> },
           // Add/Reduce Money for Talha
-          { path: "/talha/add-reduce-money", element: <AddReduceMoney /> },
+          { path: "/talha/add-purchase", element: <AddPurchase  /> },
           { path: "/talha/transfer-money", element: <TransferMoney /> },
 
           //SR Bank Payments

@@ -1,220 +1,256 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ChevronsUpDown, Check } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from "../../components/ui/card";
-import { getDatabase, ref, get, set } from "firebase/database";
-
+import { Card, CardHeader, CardTitle, CardContent } from "../../components/ui/card";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import { db } from "../../firebase";
+import { ref, get, set } from "firebase/database";
+import { Popover, PopoverTrigger, PopoverContent } from "../../components/ui/popover";
+import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from "../../components/ui/command";
+import { cn } from "../../lib/utils";
 
 export default function AddPayment() {
   const navigate = useNavigate();
-  const today = new Date();
 
-  const [date, setDate] = useState(today);
-  const [party, setParty] = useState("");
+  const [date, setDate] = useState(new Date());
+  const [fromType, setFromType] = useState("");
+  const [fromName, setFromName] = useState("");
+  const [toType, setToType] = useState("");
+  const [toName, setToName] = useState("");
   const [amount, setAmount] = useState("");
-  const [bank, setBank] = useState("");
+  const [note, setNote] = useState("");
 
   const [parties, setParties] = useState([]);
   const [banks, setBanks] = useState([]);
+  const [accounts, setAccounts] = useState([]);
 
-  // Fetch parties
+  const [fromOpen, setFromOpen] = useState(false);
+  const [toOpen, setToOpen] = useState(false);
+  const [searchText, setSearchText] = useState("");
+
+  // Load data
   useEffect(() => {
-    const db = getDatabase();
-    const partyRef = ref(db, "parties");
-    get(partyRef).then((snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        const list = Object.keys(data).map((id) => ({
-          id,
-          ...data[id],
-        }));
-        setParties(list);
-      }
-    });
+    get(ref(db, "parties")).then(s => s.exists() && setParties(Object.values(s.val())));
+    get(ref(db, "banks")).then(s => s.exists() && setBanks(Object.values(s.val())));
+    get(ref(db, "accounts")).then(s => s.exists() && setAccounts(Object.values(s.val())));
   }, []);
 
-  // Fetch banks
-  useEffect(() => {
-    const db = getDatabase();
-    const bankRef = ref(db, "banks");
-    get(bankRef).then((snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        const list = Object.keys(data).map((id) => ({
-          id,
-          ...data[id],
-        }));
-        setBanks(list);
-      }
-    });
-  }, []);
+  const getEntitiesByType = (type) => {
+    if (type === "party") return parties;
+    if (type === "bank") return banks;
+    if (type === "account") return accounts;
+    return [];
+  };
 
-  const handleAmountChange = (e) => {
-    let val = e.target.value;
-
-    if (val === "") {
-      setAmount("");
-      return;
-    }
-
-    if (/^\d*\.?\d*$/.test(val)) {
-      setAmount(val);
-    }
+  const getEntityName = (type, entity) => {
+    if (!entity) return "";
+    if (type === "party") return entity.name || "";
+    if (type === "bank") return entity.bankName || "";
+    if (type === "account") return entity.name || entity.accountName || "";
+    return "";
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (!amount || parseFloat(amount) <= 0 || !party || !bank) {
-    return alert("Please fill all required fields.");
-  }
+    e.preventDefault();
 
-  // Store full timestamp (date + time) for createdAt
-  const formattedDate = date.toISOString().split("T")[0]; // For path
-  const numericAmount = parseFloat(amount);
-  const timestamp = new Date().toISOString(); // full ISO timestamp
-
-  const paymentData = {
-    date: formattedDate,
-    party,
-    amount: numericAmount,
-    bank,              // just store method for reference
-    createdAt: timestamp,
-  };
-
-  try {
-    const db = getDatabase();
-
-    // 1️⃣ Get current payments under party/date
-    const paymentRef = ref(db, `payments/${party}/${formattedDate}`);
-    const snapshot = await get(paymentRef);
-    let nextIndex = 1;
-
-    if (snapshot.exists()) {
-      const existingPayments = snapshot.val();
-      const keys = Object.keys(existingPayments).map(
-        (k) => parseInt(k.replace("payment", "")) || 0
-      );
-      if (keys.length > 0) nextIndex = Math.max(...keys) + 1;
+    if (!fromType || !fromName || !toType || !toName || !amount) {
+      return alert("Fill all required fields");
     }
 
-    const key = `payment${nextIndex}`;
+    const transactionAmount = Number(amount);
+    const dateKey = date.toISOString().split("T")[0];
+    const entryId = `payment_${Date.now()}`;
 
-    // 2️⃣ Save payment under party/date ONLY
-    await set(ref(db, `payments/${party}/${formattedDate}/${key}`), paymentData);
+    const payload = {
+      fromType,
+      fromName,
+      toType,
+      toName,
+      amount: transactionAmount,
+      date: dateKey,
+      note,
+      createdAt: new Date().toISOString(),
+    };
 
-    alert("Payment added successfully!");
-    navigate("/payment");
-  } catch (error) {
-    console.error(error);
-    alert("Failed to add payment");
-  }
-};
+    try {
+      const updateBalance = async (type, name, delta) => {
+        const map = {
+          party: "parties",
+          bank: "banks",
+          account: "accounts",
+        };
 
+        const balanceRef = ref(db, `${map[type]}/${name}/balance`);
+        const snap = await get(balanceRef);
+        const current = snap.exists() ? snap.val() : 0;
+
+        await set(balanceRef, current + delta);
+      };
+
+      // Update balances
+      await updateBalance(fromType, fromName, -transactionAmount);
+      await updateBalance(toType, toName, transactionAmount);
+
+      // ✅ Save payment under the PARTY involved
+      let partyName = null;
+
+      if (fromType === "party") {
+        partyName = fromName;
+      } else if (toType === "party") {
+        partyName = toName;
+      }
+
+      if (partyName) {
+        await set(
+          ref(db, `payments/${partyName}/${dateKey}/${entryId}`),
+          payload
+        );
+      }
+
+      alert("Transaction saved successfully!");
+      navigate("/payment");
+    } catch (err) {
+      console.error(err);
+      alert("Error saving transaction");
+    }
+  };
+
+  const renderSearchableDropdown = (type, value, setValue, open, setOpen) => (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="w-full justify-between">
+          {value || "-- Select --"}
+          <ChevronsUpDown className="h-4 w-4 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-[260px]">
+        <Command>
+          <CommandInput placeholder="Search..." onValueChange={setSearchText} />
+          <CommandList>
+            <CommandEmpty>No results found.</CommandEmpty>
+            {getEntitiesByType(type)
+              .filter(e =>
+                getEntityName(type, e)
+                  .toLowerCase()
+                  .includes(searchText.toLowerCase())
+              )
+              .map(e => {
+                const name = getEntityName(type, e);
+                return (
+                  <CommandItem
+                    key={name}
+                    onSelect={() => {
+                      setValue(name);
+                      setOpen(false);
+                      setSearchText("");
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value === name ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {name}
+                  </CommandItem>
+                );
+              })}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 
   return (
     <div className="max-w-2xl mx-auto mt-8 px-4">
-      {/* Header */}
-      <header className="flex items-center justify-between py-3 border-b border-border/40">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate("/payment")}
-          className="h-8 w-8 hover:bg-accent"
-        >
-          <ArrowLeft className="h-4 w-4" />
+      <header className="flex items-center justify-between border-b pb-3 mb-6">
+        <Button variant="ghost" onClick={() => navigate("/payment")}>
+          <ArrowLeft />
         </Button>
-
-        <h1 className="text-lg sm:text-xl font-semibold">Add Payment</h1>
-        <div className="w-8" />
+        <h1 className="text-xl font-semibold">Add Transaction</h1>
       </header>
 
-      {/* Card */}
-      <Card className="mt-6 border border-border/40 shadow-sm">
-        <CardHeader className="pb-1">
-          <CardTitle className="text-base font-semibold">
-            Payment Details
-          </CardTitle>
+      <Card>
+        <CardHeader>
+          <CardTitle>Transaction Entry</CardTitle>
         </CardHeader>
-
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Date */}
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium">Date</label>
-              <DatePicker
-                selected={date}
-                onChange={(d) => setDate(d)}
-                dateFormat="dd/MM/yyyy"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+          <form onSubmit={handleSubmit} className="space-y-4">
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label>Date</label>
+                <DatePicker
+                  selected={date}
+                  onChange={setDate}
+                  className="w-full border p-2 rounded"
+                />
+              </div>
+              <div>
+                <label>Amount</label>
+                <input
+                  type="number"
+                  className="w-full border p-2 rounded"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label>From Type</label>
+                <select
+                  className="w-full border p-2 rounded"
+                  value={fromType}
+                  onChange={(e) => {
+                    setFromType(e.target.value);
+                    setFromName("");
+                  }}
+                >
+                  <option value="">Select</option>
+                  <option value="party">Party</option>
+                  <option value="bank">Bank</option>
+                  <option value="account">Account</option>
+                </select>
+              </div>
+              {fromType &&
+                renderSearchableDropdown(fromType, fromName, setFromName, fromOpen, setFromOpen)}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label>To Type</label>
+                <select
+                  className="w-full border p-2 rounded"
+                  value={toType}
+                  onChange={(e) => {
+                    setToType(e.target.value);
+                    setToName("");
+                  }}
+                >
+                  <option value="">Select</option>
+                  <option value="party">Party</option>
+                  <option value="bank">Bank</option>
+                  <option value="account">Account</option>
+                </select>
+              </div>
+              {toType &&
+                renderSearchableDropdown(toType, toName, setToName, toOpen, setToOpen)}
+            </div>
+
+            <div>
+              <label>Notes</label>
+              <textarea
+                className="w-full border p-2 rounded"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
               />
             </div>
 
-            {/* Party */}
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Party</label>
-              <select
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                value={party}
-                onChange={(e) => setParty(e.target.value)}
-                required
-              >
-                <option value="">Select party</option>
-                {parties.map((p) => (
-                  <option key={p.id} value={p.name}>
-                    {p.name} {p.partyType === "Vendor" ? "(Vendor)" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Amount */}
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Amount</label>
-              <input
-                type="text"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                placeholder="Enter amount"
-                value={amount}
-                onChange={handleAmountChange}
-                required
-              />
-            </div>
-
-            {/* Bank */}
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Method</label>
-              <select
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                value={bank}
-                onChange={(e) => setBank(e.target.value)}
-                required
-              >
-                <option value="">Select Method</option>
-                {banks.map((b) => (
-                  <option
-                    key={b.id}
-                    value={`${b.bankName} - ${b.accountDetails}`}
-                  >
-                    {b.bankName} ({b.accountDetails})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full h-10 text-sm font-semibold bg-primary hover:bg-primary/90"
-            >
-              Save Payment
-            </Button>
+            <Button className="w-full">Save Transaction</Button>
           </form>
         </CardContent>
       </Card>
