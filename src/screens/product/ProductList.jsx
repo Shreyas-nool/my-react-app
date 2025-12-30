@@ -9,6 +9,10 @@ const ProductList = () => {
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
 
+  // For delete confirmation
+  const [showDeletePopup, setShowDeletePopup] = useState(false);
+  const [deleteProductId, setDeleteProductId] = useState(null);
+
   useEffect(() => {
     const productsRef = ref(db, "products");
 
@@ -28,10 +32,12 @@ const ProductList = () => {
     return () => unsubscribe();
   }, []);
 
-  // Delete product
+  // Delete product after confirmation
   const handleDelete = async (id) => {
     const productRef = ref(db, `products/${id}`);
     await remove(productRef);
+    setShowDeletePopup(false);
+    setDeleteProductId(null);
   };
 
   // Inline update handler
@@ -113,7 +119,11 @@ const ProductList = () => {
                     contentEditable
                     suppressContentEditableWarning
                     onBlur={(e) =>
-                      handleInlineUpdate(prod.id, "productName", e.target.innerText.trim())
+                      handleInlineUpdate(
+                        prod.id,
+                        "productName",
+                        e.target.innerText.trim()
+                      )
                     }
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -159,7 +169,11 @@ const ProductList = () => {
                     contentEditable
                     suppressContentEditableWarning
                     onBlur={(e) =>
-                      handleInlineUpdate(prod.id, "notes", e.target.innerText.trim())
+                      handleInlineUpdate(
+                        prod.id,
+                        "notes",
+                        e.target.innerText.trim()
+                      )
                     }
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -177,7 +191,10 @@ const ProductList = () => {
                       variant="destructive"
                       size="sm"
                       className="h-8"
-                      onClick={() => handleDelete(prod.id)}
+                      onClick={() => {
+                        setDeleteProductId(prod.id);
+                        setShowDeletePopup(true);
+                      }}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -188,6 +205,37 @@ const ProductList = () => {
           </tbody>
         </table>
       </div>
+
+      {/* Delete Confirmation Popup */}
+      {showDeletePopup && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg w-80">
+            <h3 className="font-semibold text-lg mb-2">
+              Delete Product?
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowDeletePopup(false);
+                  setDeleteProductId(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => handleDelete(deleteProductId)}
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

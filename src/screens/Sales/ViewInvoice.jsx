@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { ArrowLeft, Edit, Printer } from "lucide-react";
 
-/* ✅ Date formatter: DD-MM-YY */
+/* Date formatter */
 const formatDate = (dateString) => {
   if (!dateString) return "-";
   const date = new Date(dateString);
@@ -13,13 +13,9 @@ const formatDate = (dateString) => {
   return `${dd}-${mm}-${yy}`;
 };
 
-/* ✅ Unit price → show ORIGINAL value */
-const formatUnitPrice = (value) =>
-  Number(value || 0).toString();
-
-/* ✅ Total → 2 decimals */
-const formatTotal = (value) =>
-  Number(value || 0).toFixed(2);
+/* Price formatting */
+const formatPrice = (value) => Number(value || 0).toFixed(4);
+const formatTotal = (value) => Number(value || 0).toFixed(2);
 
 export default function ViewInvoice() {
   const navigate = useNavigate();
@@ -37,15 +33,14 @@ export default function ViewInvoice() {
     );
   }
 
-  /* ✅ Invoice total */
-  const invoiceTotal = sale.items.reduce(
-    (sum, item) => sum + Number(item.total || 0),
+  /* Totals */
+  const totalBoxes = sale.items.reduce(
+    (sum, item) => sum + Number(item.box || 0),
     0
   );
 
-  /* ✅ Total boxes */
-  const totalBoxes = sale.items.reduce(
-    (sum, item) => sum + Number(item.box || 0),
+  const invoiceTotal = sale.items.reduce(
+    (sum, item) => sum + Number(item.total || 0),
     0
   );
 
@@ -83,11 +78,8 @@ export default function ViewInvoice() {
       </div>
 
       {/* Invoice Content */}
-      <div
-        ref={printRef}
-        className="bg-white shadow-lg border p-6"
-      >
-        {/* Header: Party Name left, Sales Invoice centered */}
+      <div ref={printRef} className="bg-white shadow-lg border p-6">
+        {/* Header */}
         <header className="mb-6 relative">
           <h1 className="text-2xl font-bold">{sale.party}</h1>
           <span className="absolute left-1/2 top-0 transform -translate-x-1/2 text-lg font-semibold">
@@ -101,18 +93,14 @@ export default function ViewInvoice() {
             <p><strong>Invoice #:</strong> {sale.invoiceNumber}</p>
             <p><strong>Date:</strong> {formatDate(sale.createdAt)}</p>
           </div>
-
-          <div>
-            {sale.address && <p><strong>Address:</strong> {sale.address}</p>}
-            {sale.contact && <p><strong>Contact:</strong> {sale.contact}</p>}
-          </div>
         </section>
 
-        {/* Products Table */}
+        {/* Table */}
         <table className="w-full border text-sm text-center">
           <thead className="bg-gray-100">
             <tr>
-              <th className="border p-2">SR NO.</th>
+              <th className="border p-2">SR</th>
+              <th className="border p-2">Category</th>
               <th className="border p-2">Product</th>
               <th className="border p-2">Box</th>
               <th className="border p-2">Pcs/Box</th>
@@ -125,28 +113,34 @@ export default function ViewInvoice() {
             {sale.items.map((item, index) => (
               <tr key={index}>
                 <td className="border p-2">{index + 1}</td>
+                <td className="border p-2">{item.category}</td>
                 <td className="border p-2">{item.productName}</td>
                 <td className="border p-2">{item.box}</td>
                 <td className="border p-2">{item.piecesPerBox}</td>
-                <td className="border p-2">{formatUnitPrice(item.pricePerItem)}</td>
-                <td className="border p-2">{formatTotal(item.total)}</td>
+                <td className="border p-2">
+                  {formatPrice(item.pricePerItem)}
+                </td>
+                <td className="border p-2">
+                  {formatTotal(item.total)}
+                </td>
               </tr>
             ))}
           </tbody>
 
           <tfoot>
-            <tr className="bg-gray-100">
-              <td colSpan={2} className="border p-2 text-right font-semibold">
-                Total:
+            <tr className="bg-gray-100 font-semibold">
+              <td colSpan={3} className="border p-2 text-right">
+                Total
               </td>
-              <td className="border p-2 font-semibold">{totalBoxes}</td>
+              <td className="border p-2">{totalBoxes}</td>
               <td className="border p-2"></td>
-              <td className="border p-2 text-right font-semibold">Invoice Total:</td>
-              <td className="border p-2 text-center font-bold">{formatTotal(invoiceTotal)}</td>
+              <td className="border p-2 text-right">Invoice Total</td>
+              <td className="border p-2">
+                {formatTotal(invoiceTotal)}
+              </td>
             </tr>
           </tfoot>
         </table>
-
       </div>
     </div>
   );
