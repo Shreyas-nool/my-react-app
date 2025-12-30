@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "../../components/ui/card";
-import { getDatabase, ref, onValue } from "firebase/database";
+import { getDatabase, ref, onValue, remove } from "firebase/database";
 
 export default function PaymentScreen() {
   const navigate = useNavigate();
@@ -30,6 +30,7 @@ export default function PaymentScreen() {
 
             list.push({
               id: key,
+              path: `payments/${party}/${date}/${key}`,
               date,
               from: p.fromName,
               to: p.toName,
@@ -62,6 +63,18 @@ export default function PaymentScreen() {
   const filteredPayments = filterDate
     ? payments.filter((p) => p.date === filterDate)
     : payments;
+
+  const handleDelete = async (path) => {
+    if (!window.confirm("Are you sure you want to delete this payment?")) return;
+    try {
+      const db = getDatabase();
+      await remove(ref(db, path));
+      alert("Payment deleted successfully");
+    } catch (err) {
+      console.error(err);
+      alert("Error deleting payment");
+    }
+  };
 
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-2 sm:p-4 space-y-4 overflow-hidden">
@@ -116,6 +129,7 @@ export default function PaymentScreen() {
                       <th className="px-4 py-2">Type</th>
                       <th className="px-4 py-2">Amount</th>
                       <th className="px-4 py-2">Notes</th>
+                      <th className="px-4 py-2">Action</th>
                     </tr>
                   </thead>
 
@@ -128,6 +142,15 @@ export default function PaymentScreen() {
                         <td className="px-4 py-2 font-medium">{p.type}</td>
                         <td className="px-4 py-2 font-semibold">{p.amount}</td>
                         <td className="px-4 py-2">{p.note}</td>
+                        <td className="px-4 py-2">
+                          <Button
+                            variant="ghost"
+                            className="text-red-600"
+                            onClick={() => handleDelete(p.path)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

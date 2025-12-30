@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
-import { ref, push, onValue, serverTimestamp } from "firebase/database";
+import { ref, push, onValue, off, serverTimestamp } from "firebase/database";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Textarea } from "../../components/ui/textarea";
@@ -17,36 +17,58 @@ export default function AddPurchase() {
   const [notes, setNotes] = useState("");
   const [balance, setBalance] = useState(0);
 
-  const CURRENT_BANK = "Talha";
+  const BANK_NAME = "Talha";
+
+  // Helper → always show 2 decimals
+  const formatAmount = (num) => Number(num).toFixed(2);
 
   // --------------------------
-  // FETCH CURRENT BALANCE FROM PAYMENTS
+  // FETCH CURRENT BALANCE (PURCHASES - PAYMENTS)
   // --------------------------
   useEffect(() => {
-    const paymentsRef = ref(db, "phurchase/Talha");
+    const purchaseRef = ref(db, "phurchase/Talha");
+    const paymentRef = ref(db, "payments");
 
-    const unsubscribe = onValue(paymentsRef, (snapshot) => {
-      const data = snapshot.val();
-      if (!data) {
-        setBalance(0);
-        return;
-      }
+    const calculateBalance = (purchaseSnap, paymentSnap) => {
+      const purchases = purchaseSnap.val() || {};
+      const payments = paymentSnap.val() || {};
 
       let total = 0;
-      Object.values(data).forEach((dateNode) => {
-        if (typeof dateNode !== "object") return;
 
-        Object.values(dateNode).forEach((purchase) => {
-          if (Number(purchase.amountINR)) {
-            total += Number(purchase.amountINR);
-          }
+      // ---------------- Purchases subtract ----------------
+      Object.values(purchases).forEach((dateNode) => {
+        Object.values(dateNode || {}).forEach((p) => {
+          total -= Number(p.amountINR || 0); // Deduct purchase
         });
       });
 
+      // ---------------- Payments add ----------------
+      Object.values(payments).forEach((partyNode) => {
+        Object.values(partyNode || {}).forEach((dateNode) => {
+          Object.values(dateNode || {}).forEach((p) => {
+            if (p.toType === "account" && p.toName === BANK_NAME) {
+              total += Number(p.amount || 0); // Add payment
+            }
+          });
+        });
+      });
+
+      // Round to 2 decimals
+      total = Math.round((total + Number.EPSILON) * 100) / 100;
+
       setBalance(total);
+    };
+
+    const unsubPurchases = onValue(purchaseRef, (pSnap) => {
+      onValue(paymentRef, (paySnap) => {
+        calculateBalance(pSnap, paySnap);
+      });
     });
 
-    return () => unsubscribe();
+    return () => {
+      off(purchaseRef);
+      off(paymentRef);
+    };
   }, []);
 
   // --------------------------
@@ -63,16 +85,14 @@ export default function AddPurchase() {
     const newPurchase = {
       party: "Talha Purchase",
       date,
-      bank: CURRENT_BANK + " - Online",
+      bank: BANK_NAME + " - Online",
       amountINR: Number(amountINR),
       notes,
-      createdAt: serverTimestamp(),
+      createdAt: serverTimestamp(), // saves exact timestamp with time
     };
 
     try {
-      // Get a reference to the date node
       const dateRef = ref(db, `phurchase/Talha/${date}`);
-      // Push a new purchase under that date
       await push(dateRef, newPurchase);
 
       toast.success("✅ Purchase recorded successfully");
@@ -100,7 +120,7 @@ export default function AddPurchase() {
 
       {/* Current Balance */}
       <div className="bg-white p-4 rounded-2xl shadow-md border border-gray-100 text-gray-800 font-semibold text-lg">
-        Current Balance: {balance.toLocaleString()}
+        Current Balance: {formatAmount(balance)}
       </div>
 
       {/* Form */}

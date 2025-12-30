@@ -7,8 +7,18 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { db } from "../../firebase";
 import { ref, get, set } from "firebase/database";
-import { Popover, PopoverTrigger, PopoverContent } from "../../components/ui/popover";
-import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from "../../components/ui/command";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "../../components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandItem,
+  CommandEmpty,
+} from "../../components/ui/command";
 import { cn } from "../../lib/utils";
 
 export default function AddPayment() {
@@ -30,7 +40,6 @@ export default function AddPayment() {
   const [toOpen, setToOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
 
-  // Load data
   useEffect(() => {
     get(ref(db, "parties")).then(s => s.exists() && setParties(Object.values(s.val())));
     get(ref(db, "banks")).then(s => s.exists() && setBanks(Object.values(s.val())));
@@ -46,9 +55,9 @@ export default function AddPayment() {
 
   const getEntityName = (type, entity) => {
     if (!entity) return "";
-    if (type === "party") return entity.name || "";
-    if (type === "bank") return entity.bankName || "";
-    if (type === "account") return entity.name || entity.accountName || "";
+    if (type === "party") return entity.name;
+    if (type === "bank") return entity.bankName;
+    if (type === "account") return entity.name || entity.accountName;
     return "";
   };
 
@@ -56,60 +65,55 @@ export default function AddPayment() {
     e.preventDefault();
 
     if (!fromType || !fromName || !toType || !toName || !amount) {
-      return alert("Fill all required fields");
+      return alert("Fill all fields");
     }
 
-    const transactionAmount = Number(amount);
+    const amt = Number(amount);
     const dateKey = date.toISOString().split("T")[0];
-    const entryId = `payment_${Date.now()}`;
 
     const payload = {
       fromType,
       fromName,
       toType,
       toName,
-      amount: transactionAmount,
+      amount: amt,
       date: dateKey,
+      timestamp: new Date().toISOString(),
       note,
-      createdAt: new Date().toISOString(),
+    };
+
+    const updateBalance = async (type, name, delta) => {
+      const map = {
+        party: "parties",
+        bank: "banks",
+        account: "accounts",
+      };
+
+      const refBal = ref(db, `${map[type]}/${name}/balance`);
+      const snap = await get(refBal);
+      const current = snap.exists() ? snap.val() : 0;
+      await set(refBal, current + delta);
     };
 
     try {
-      const updateBalance = async (type, name, delta) => {
-        const map = {
-          party: "parties",
-          bank: "banks",
-          account: "accounts",
-        };
+      await updateBalance(fromType, fromName, -amt);
+      await updateBalance(toType, toName, amt);
 
-        const balanceRef = ref(db, `${map[type]}/${name}/balance`);
-        const snap = await get(balanceRef);
-        const current = snap.exists() ? snap.val() : 0;
+      const party =
+        fromType === "party"
+          ? fromName
+          : toType === "party"
+          ? toName
+          : null;
 
-        await set(balanceRef, current + delta);
-      };
-
-      // Update balances
-      await updateBalance(fromType, fromName, -transactionAmount);
-      await updateBalance(toType, toName, transactionAmount);
-
-      // ✅ Save payment under the PARTY involved
-      let partyName = null;
-
-      if (fromType === "party") {
-        partyName = fromName;
-      } else if (toType === "party") {
-        partyName = toName;
-      }
-
-      if (partyName) {
+      if (party) {
         await set(
-          ref(db, `payments/${partyName}/${dateKey}/${entryId}`),
+          ref(db, `payments/${party}/${dateKey}/${Date.now()}`),
           payload
         );
       }
 
-      alert("Transaction saved successfully!");
+      alert("Transaction Added");
       navigate("/payment");
     } catch (err) {
       console.error(err);
@@ -117,19 +121,19 @@ export default function AddPayment() {
     }
   };
 
-  const renderSearchableDropdown = (type, value, setValue, open, setOpen) => (
+  const renderDropdown = (type, value, setValue, open, setOpen) => (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" className="w-full justify-between">
-          {value || "-- Select --"}
+          {value || "Select"}
           <ChevronsUpDown className="h-4 w-4 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="p-0 w-[260px]">
+      <PopoverContent className="p-0 w-[240px]">
         <Command>
           <CommandInput placeholder="Search..." onValueChange={setSearchText} />
           <CommandList>
-            <CommandEmpty>No results found.</CommandEmpty>
+            <CommandEmpty>No result</CommandEmpty>
             {getEntitiesByType(type)
               .filter(e =>
                 getEntityName(type, e)
@@ -164,96 +168,104 @@ export default function AddPayment() {
   );
 
   return (
-    <div className="max-w-2xl mx-auto mt-8 px-4">
-      <header className="flex items-center justify-between border-b pb-3 mb-6">
-        <Button variant="ghost" onClick={() => navigate("/payment")}>
-          <ArrowLeft />
-        </Button>
-        <h1 className="text-xl font-semibold">Add Transaction</h1>
-      </header>
+    <div className="min-h-screen flex justify-center px-4 pt-8">
+      <div className="w-full max-w-2xl">
+        {/* HEADER OUTSIDE CARD */}
+        <div className="flex items-center gap-3 mb-6">
+          <Button variant="ghost" onClick={() => navigate("/payment")}>
+            <ArrowLeft />
+          </Button>
+          <h1 className="text-xl px-50 font-semibold">Add Transaction</h1>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Transaction Entry</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <Card>
+          <CardContent className="pt-6">
+            <form onSubmit={handleSubmit} className="space-y-4">
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label>Date</label>
+                  <DatePicker
+                    selected={date}
+                    onChange={setDate}
+                    className="w-full border rounded p-2"
+                  />
+                </div>
+                <div>
+                  <label>Amount</label>
+                  <input
+                    type="number"
+                    className="w-full border rounded p-2"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label>From Type</label>
+                  <select
+                    className="w-full border rounded p-2"
+                    value={fromType}
+                    onChange={(e) => {
+                      setFromType(e.target.value);
+                      setFromName("");
+                    }}
+                  >
+                    <option value="">Select</option>
+                    <option value="party">Party</option>
+                    <option value="bank">Bank</option>
+                    <option value="account">Account</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label>From</label>
+                  {fromType &&
+                    renderDropdown(fromType, fromName, setFromName, fromOpen, setFromOpen)}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label>To Type</label>
+                  <select
+                    className="w-full border rounded p-2"
+                    value={toType}
+                    onChange={(e) => {
+                      setToType(e.target.value);
+                      setToName("");
+                    }}
+                  >
+                    <option value="">Select</option>
+                    <option value="party">Party</option>
+                    <option value="bank">Bank</option>
+                    <option value="account">Account</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label>To</label>
+                  {toType &&
+                    renderDropdown(toType, toName, setToName, toOpen, setToOpen)}
+                </div>
+              </div>
+
               <div>
-                <label>Date</label>
-                <DatePicker
-                  selected={date}
-                  onChange={setDate}
-                  className="w-full border p-2 rounded"
+                <label>Notes</label>
+                <textarea
+                  className="w-full border rounded p-2"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
                 />
               </div>
-              <div>
-                <label>Amount</label>
-                <input
-                  type="number"
-                  className="w-full border p-2 rounded"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label>From Type</label>
-                <select
-                  className="w-full border p-2 rounded"
-                  value={fromType}
-                  onChange={(e) => {
-                    setFromType(e.target.value);
-                    setFromName("");
-                  }}
-                >
-                  <option value="">Select</option>
-                  <option value="party">Party</option>
-                  <option value="bank">Bank</option>
-                  <option value="account">Account</option>
-                </select>
-              </div>
-              {fromType &&
-                renderSearchableDropdown(fromType, fromName, setFromName, fromOpen, setFromOpen)}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label>To Type</label>
-                <select
-                  className="w-full border p-2 rounded"
-                  value={toType}
-                  onChange={(e) => {
-                    setToType(e.target.value);
-                    setToName("");
-                  }}
-                >
-                  <option value="">Select</option>
-                  <option value="party">Party</option>
-                  <option value="bank">Bank</option>
-                  <option value="account">Account</option>
-                </select>
-              </div>
-              {toType &&
-                renderSearchableDropdown(toType, toName, setToName, toOpen, setToOpen)}
-            </div>
-
-            <div>
-              <label>Notes</label>
-              <textarea
-                className="w-full border p-2 rounded"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
-            </div>
-
-            <Button className="w-full">Save Transaction</Button>
-          </form>
-        </CardContent>
-      </Card>
+              <Button className="w-full mt-4">Save Transaction</Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
