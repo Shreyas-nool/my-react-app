@@ -14,7 +14,7 @@ const formatDate = (dateString) => {
 };
 
 /* Price formatting */
-const formatPrice = (value) => Number(value || 0).toFixed(4);
+const formatPrice = (value) => Number(value || 0).toFixed(2);
 const formatTotal = (value) => Number(value || 0).toFixed(2);
 
 export default function ViewInvoice() {

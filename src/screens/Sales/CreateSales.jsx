@@ -8,7 +8,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, ChevronsUpDown, Check, Trash2 } from "lucide-react";
 import { db } from "../../firebase";
-import { ref, set, runTransaction, onValue} from "firebase/database";
+import { ref, set, runTransaction, onValue } from "firebase/database";
 import { cn } from "../../lib/utils";
 
 // Format ISO with date & time
@@ -35,6 +35,9 @@ const SalesInvoice = () => {
   const [parties, setParties] = useState([]);
   const [selectedParty, setSelectedParty] = useState("");
   const [partyOpen, setPartyOpen] = useState(false);
+
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [categoryOpen, setCategoryOpen] = useState(false);
 
   const [selectedStock, setSelectedStock] = useState(null);
   const [productOpen, setProductOpen] = useState(false);
@@ -78,6 +81,7 @@ const SalesInvoice = () => {
       setItems(invoiceToEdit.items || []);
       setSubtotal(invoiceToEdit.subtotal || invoiceToEdit.total || 0);
       setCreatedAt(invoiceToEdit.createdAt ? new Date(invoiceToEdit.createdAt) : new Date());
+      if (invoiceToEdit.items?.[0]?.category) setSelectedCategory(invoiceToEdit.items[0].category);
     }
   }, [invoiceToEdit]);
 
@@ -209,10 +213,15 @@ const SalesInvoice = () => {
   };
 
   const totalBoxes = items.reduce((s, i) => s + Number(i.box || 0), 0);
-  const totalPieces = items.reduce((s, i) => s + Number(i.box || 0) * Number(i.piecesPerBox || 0), 0);
+
+  // Filter products based on selected category
+  const filteredStocks = selectedCategory
+    ? stocks.filter((s) => s.category === selectedCategory)
+    : [];
 
   return (
     <div className="max-w-6xl mx-auto p-6 mt-10 space-y-6">
+      {/* HEADER */}
       <header className="flex items-center justify-between py-2 sm:py-3 border-b border-border/50">
         <Button variant="ghost" size="sm" onClick={() => navigate("/sales")} className="h-8 w-8 sm:h-9 sm:w-9 p-0 sm:p-2 hover:bg-accent">
           <ArrowLeft className="h-4 w-4" />
@@ -280,9 +289,33 @@ const SalesInvoice = () => {
         </div>
       </div>
 
-      {/* Product Selection */}
-      <div className="grid grid-cols-1 sm:grid-cols-6 gap-4 mt-4">
-        <div className="sm:col-span-2 flex flex-col gap-1">
+      {/* Category & Product Selection */}
+      <div className="flex gap-3 mt-4 items-end w-full">
+        {/* Category */}
+        <div className="sm:col-span-2 w-full flex flex-col gap-1">
+          <label className="text-sm font-medium">Category</label>
+          <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-full justify-between px-3">
+                {selectedCategory || "Select Category"}
+                <ChevronsUpDown className="h-4 w-4 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="p-0 w-[260px]">
+              <Command>
+                <CommandEmpty>No category found.</CommandEmpty>
+                {Array.from(new Set(stocks.map(s => s.category))).map((cat, i) => (
+                  <CommandItem key={i} onSelect={() => { setSelectedCategory(cat); setSelectedStock(null); setCategoryOpen(false); }}>
+                    {cat}
+                  </CommandItem>
+                ))}
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        {/* Product */}
+        <div className="sm:col-span-2 w-full flex flex-col gap-1">
           <label className="text-sm font-medium">Product</label>
           <Popover open={productOpen} onOpenChange={setProductOpen}>
             <PopoverTrigger asChild>
@@ -295,47 +328,34 @@ const SalesInvoice = () => {
               <Command>
                 <CommandInput placeholder="Search product..." onValueChange={setSearchText} />
                 <CommandList>
-                  {searchText.length < 2 && <div className="p-2 text-sm text-red-500">Enter at least 2 characters to search.</div>}
                   <CommandEmpty>No product found.</CommandEmpty>
-                  {searchText.length >= 2 &&
-                    stocks
-                      .filter((s) => (s?.productName || "").toLowerCase().includes((searchText || "").toLowerCase()))
-                      .map((s) => (
-                        <CommandItem key={s.id} value={s.productName} onSelect={() => handleSelectStock(s)}>
-                          <Check className={cn("mr-2 h-4 w-4", selectedStock?.id === s.id ? "opacity-100" : "opacity-0")} />
-                          {s.productName}
-                        </CommandItem>
-                      ))}
+                  {filteredStocks
+                    .filter((s) => (s.productName || "").toLowerCase().includes((searchText || "").toLowerCase()))
+                    .map((s) => (
+                      <CommandItem key={s.id} onSelect={() => handleSelectStock(s)}>
+                        <Check className={cn("mr-2 h-4 w-4", selectedStock?.id === s.id ? "opacity-100" : "opacity-0")} />
+                        {s.productName}
+                      </CommandItem>
+                  ))}
                 </CommandList>
               </Command>
             </PopoverContent>
           </Popover>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium">Category</label>
-          <Input value={selectedStock?.category || ""} readOnly className="bg-slate-100" />
-        </div>
-
-        <div className="flex flex-col gap-1">
+        {/* Box, Pieces, Price */}
+        <div className="flex w-full flex-col gap-1">
           <label className="text-sm font-medium">Box</label>
           <Input type="number" value={box} onChange={(e) => handleBoxChange(Number(e.target.value))} />
           {stockWarning && <p className="text-red-500 text-xs mt-1">{stockWarning}</p>}
         </div>
-
-        <div className="flex flex-col gap-1">
+        <div className="flex w-full flex-col gap-1">
           <label className="text-sm font-medium">Pieces/Box</label>
           <Input type="number" value={piecesPerBox} readOnly className="bg-slate-100" />
         </div>
-
-        <div className="flex flex-col gap-1">
+        <div className="flex w-full flex-col gap-1">
           <label className="text-sm font-medium">Price/Item</label>
-          <Input
-            type="number"
-            step="0.01"
-            value={pricePerItem}
-            onChange={(e) => setPricePerItem(e.target.value)}
-          />
+          <Input type="number" step="0.01" value={pricePerItem} onChange={(e) => setPricePerItem(e.target.value)} />
         </div>
       </div>
 
@@ -361,33 +381,31 @@ const SalesInvoice = () => {
           <tbody>
             {items.length === 0 ? (
               <tr><td colSpan="8" className="text-center p-4">No items added.</td></tr>
-            ) : (
-              items.map((item, i) => (
-                <tr key={i}>
-                  <td className="border p-2">{i + 1}</td>
-                  <td className="border p-2">{item.category}</td>
-                  <td className="border p-2">{item.productName}</td>
-                  <td className="border p-2">{item.box}</td>
-                  <td className="border p-2">{item.piecesPerBox}</td>
-                  <td className="border p-2">{Number(item.pricePerItem).toFixed(4)}</td>
-                  <td className="border p-2">{item.total.toFixed(2)}</td>
-                  <td className="border p-2">
-                    <Button variant="destructive" size="sm" onClick={() => handleDeleteItem(i)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </td>
-                </tr>
-              ))
-            )}
+            ) : items.map((item, i) => (
+              <tr key={i}>
+                <td className="border p-2">{i + 1}</td>
+                <td className="border p-2">{item.category}</td>
+                <td className="border p-2">{item.productName}</td>
+                <td className="border p-2">{item.box}</td>
+                <td className="border p-2">{item.piecesPerBox}</td>
+                <td className="border p-2">{Number(item.pricePerItem).toFixed(2)}</td>
+                <td className="border p-2">{item.total.toFixed(2)}</td>
+                <td className="border p-2">
+                  <Button variant="destructive" size="sm" onClick={() => handleDeleteItem(i)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </td>
+              </tr>
+            ))}
             {items.length > 0 && (
               <tr className="bg-gray-100 font-semibold">
-                <td colSpan="2" className="border p-2">{/* empty */}</td>
+                <td colSpan="2" className="border p-2"></td>
                 <td className="border p-2 text-right">Total:</td>
                 <td className="border p-2">{totalBoxes}</td>
-                <td className="border p-2">{/* empty */}</td>
+                <td className="border p-2"></td>
                 <td className="border p-2 text-right">Grand Total:</td>
                 <td className="border p-2">{subtotal.toFixed(2)}</td>
-                <td className="border p-2">{/* empty */}</td>
+                <td className="border p-2"></td>
               </tr>
             )}
           </tbody>
