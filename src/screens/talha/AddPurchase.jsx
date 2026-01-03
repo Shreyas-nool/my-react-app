@@ -19,55 +19,70 @@ export default function AddPurchase() {
 
   const BANK_NAME = "Talha";
 
-  // Helper → always show 2 decimals
   const formatAmount = (num) => Number(num).toFixed(2);
 
   // --------------------------
-  // FETCH CURRENT BALANCE (PURCHASES - PAYMENTS)
+  // REAL-TIME BALANCE CALCULATION
   // --------------------------
   useEffect(() => {
     const purchaseRef = ref(db, "phurchase/Talha");
     const paymentRef = ref(db, "payments");
+    const expenseRef = ref(db, "expenses");
 
-    const calculateBalance = (purchaseSnap, paymentSnap) => {
-      const purchases = purchaseSnap.val() || {};
-      const payments = paymentSnap.val() || {};
-
+    const calculateBalance = (purchases, payments, expenses) => {
       let total = 0;
 
-      // ---------------- Purchases subtract ----------------
-      Object.values(purchases).forEach((dateNode) => {
+      // ---------------- Purchases (subtract) ----------------
+      Object.values(purchases || {}).forEach((dateNode) => {
         Object.values(dateNode || {}).forEach((p) => {
-          total -= Number(p.amountINR || 0); // Deduct purchase
+          total -= Number(p.amountINR || 0);
         });
       });
 
-      // ---------------- Payments add ----------------
-      Object.values(payments).forEach((partyNode) => {
+      // ---------------- Payments (add) ----------------
+      Object.values(payments || {}).forEach((partyNode) => {
         Object.values(partyNode || {}).forEach((dateNode) => {
           Object.values(dateNode || {}).forEach((p) => {
             if (p.toType === "account" && p.toName === BANK_NAME) {
-              total += Number(p.amount || 0); // Add payment
+              total += Number(p.amount || 0);
             }
           });
         });
       });
 
-      // Round to 2 decimals
-      total = Math.round((total + Number.EPSILON) * 100) / 100;
+      // ---------------- Expenses (subtract) ----------------
+      Object.values(expenses || {}).forEach((dateNode) => {
+        Object.values(dateNode || {}).forEach((categories) => {
+          Object.entries(categories).forEach(([entity, items]) => {
+            if (entity === BANK_NAME) {
+              Object.values(items || {}).forEach((exp) => {
+                total -= Number(exp.amount || 0);
+              });
+            }
+          });
+        });
+      });
 
+      total = Math.round((total + Number.EPSILON) * 100) / 100;
       setBalance(total);
     };
 
+    // Subscribe to all nodes
     const unsubPurchases = onValue(purchaseRef, (pSnap) => {
+      const purchases = pSnap.val() || {};
       onValue(paymentRef, (paySnap) => {
-        calculateBalance(pSnap, paySnap);
+        const payments = paySnap.val() || {};
+        onValue(expenseRef, (expSnap) => {
+          const expenses = expSnap.val() || {};
+          calculateBalance(purchases, payments, expenses);
+        });
       });
     });
 
     return () => {
       off(purchaseRef);
       off(paymentRef);
+      off(expenseRef);
     };
   }, []);
 
@@ -88,7 +103,7 @@ export default function AddPurchase() {
       bank: BANK_NAME + " - Online",
       amountINR: Number(amountINR),
       notes,
-      createdAt: serverTimestamp(), // saves exact timestamp with time
+      createdAt: serverTimestamp(),
     };
 
     try {
@@ -120,7 +135,7 @@ export default function AddPurchase() {
 
       {/* Current Balance */}
       <div className="bg-white p-4 rounded-2xl shadow-md border border-gray-100 text-gray-800 font-semibold text-lg">
-        Current Balance: {formatAmount(balance)}
+        Current Balance: ₹{formatAmount(balance)}
       </div>
 
       {/* Form */}

@@ -31,7 +31,7 @@ const ExpenseScreen = () => {
   const [total, setTotal] = useState(0);
 
   // ----------------------------------
-  // FETCH EXPENSES
+  // FETCH EXPENSES FROM GLOBAL "expenses" NODE ONLY
   // ----------------------------------
   useEffect(() => {
     const expRef = ref(db, "expenses");
@@ -40,14 +40,13 @@ const ExpenseScreen = () => {
       const data = snapshot.val() || {};
       let all = [];
 
-      Object.entries(data).forEach(([date, cats]) => {
-        Object.entries(cats).forEach(([category, entities]) => {
-          Object.entries(entities).forEach(([entity, items]) => {
-            Object.entries(items).forEach(([id, exp]) => {
-              all.push({
-                ...exp,
-                _path: `expenses/${date}/${category}/${entity}/${id}`,
-              });
+      // Loop by category -> entity -> expenseID
+      Object.entries(data).forEach(([category, entities]) => {
+        Object.entries(entities).forEach(([entityName, items]) => {
+          Object.entries(items).forEach(([id, exp]) => {
+            all.push({
+              ...exp,
+              _path: `expenses/${category}/${entityName}/${id}`,
             });
           });
         });
@@ -66,14 +65,10 @@ const ExpenseScreen = () => {
     let data = [...expenses];
 
     if (fromDate)
-      data = data.filter(
-        (e) => new Date(e.date) >= new Date(fromDate)
-      );
+      data = data.filter((e) => new Date(e.date) >= new Date(fromDate));
 
     if (toDate)
-      data = data.filter(
-        (e) => new Date(e.date) <= new Date(toDate)
-      );
+      data = data.filter((e) => new Date(e.date) <= new Date(toDate));
 
     setFiltered(data);
 
@@ -82,7 +77,7 @@ const ExpenseScreen = () => {
   }, [fromDate, toDate, expenses]);
 
   // ----------------------------------
-  // DELETE
+  // DELETE EXPENSE
   // ----------------------------------
   const handleDelete = async (exp) => {
     if (!window.confirm("Delete this expense?")) return;
@@ -105,39 +100,37 @@ const ExpenseScreen = () => {
       </div>
 
       {/* SUMMARY CARD */}
-      {/* SUMMARY CARD */}
-<Card className="mb-3">
-  <CardContent className="flex flex-wrap items-center justify-between gap-3 py-2 px-3">
+      <Card className="mb-3">
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 py-2 px-3">
 
-    {/* TOTAL */}
-    <div>
-      <p className="text-[11px] text-muted-foreground leading-none">
-        Total Expense
-      </p>
-      <p className="text-lg font-semibold text-red-600 leading-tight">
-        ₹{total.toFixed(2)}
-      </p>
-    </div>
+          {/* TOTAL */}
+          <div>
+            <p className="text-[11px] text-muted-foreground leading-none">
+              Total Expense
+            </p>
+            <p className="text-lg font-semibold text-red-600 leading-tight">
+              ₹{total.toFixed(2)}
+            </p>
+          </div>
 
-    {/* DATE FILTER */}
-    <div className="flex gap-2">
-      <DatePicker
-        selected={fromDate}
-        onChange={(d) => setFromDate(d)}
-        placeholderText="From"
-        className="border px-2 py-1 rounded text-sm w-[110px]"
-      />
-      <DatePicker
-        selected={toDate}
-        onChange={(d) => setToDate(d)}
-        placeholderText="To"
-        className="border px-2 py-1 rounded text-sm w-[110px]"
-      />
-    </div>
+          {/* DATE FILTER */}
+          <div className="flex gap-2">
+            <DatePicker
+              selected={fromDate}
+              onChange={(d) => setFromDate(d)}
+              placeholderText="From"
+              className="border px-2 py-1 rounded text-sm w-[110px]"
+            />
+            <DatePicker
+              selected={toDate}
+              onChange={(d) => setToDate(d)}
+              placeholderText="To"
+              className="border px-2 py-1 rounded text-sm w-[110px]"
+            />
+          </div>
 
-  </CardContent>
-</Card>
-
+        </CardContent>
+      </Card>
 
       {/* TABLE */}
       <Card>

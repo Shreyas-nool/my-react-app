@@ -54,7 +54,6 @@ import DueDateScreen from "./screens/dueDate/DueDateScreen";
 import AddPurchase from "./screens/talha/AddPurchase";
 import TransferMoney from "./screens/talha/TransferMoney.jsx";
 
-import JrAddReduceMoney from "./screens/JR/JrAddReduceMoney";
 import JrTransferMoney from "./screens/JR/JrTransferMoney";
 
 import SrAddReduceMoney from "./screens/SR/SrAddReduceMoney";
@@ -152,8 +151,7 @@ const router = createBrowserRouter([
 
           //JR Bank Payments
           { path: "/jr", element: <JrBankPayments /> },
-          { path: "/jr/add-reduce-money", element: <JrAddReduceMoney />},
-          { path: "/jr/transfer-money", element: <JrTransferMoney />},
+          { path: "/jr/transfer", element: <JrTransferMoney />},
 
           //Due date
           { path: "/duedate", element: <DueDateScreen />},

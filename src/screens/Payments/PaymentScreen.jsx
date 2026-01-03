@@ -2,7 +2,12 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "../../components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "../../components/ui/card";
 import { getDatabase, ref, onValue, remove } from "firebase/database";
 
 export default function PaymentScreen() {
@@ -10,75 +15,86 @@ export default function PaymentScreen() {
   const [payments, setPayments] = useState([]);
   const [filterDate, setFilterDate] = useState("");
 
+  /* ================= LOAD PAYMENTS ================= */
   useEffect(() => {
     const db = getDatabase();
     const paymentsRef = ref(db, "payments");
 
-    const unsubscribe = onValue(paymentsRef, (snapshot) => {
-      if (!snapshot.exists()) {
-        setPayments([]);
-        return;
-      }
+    const unsub = onValue(paymentsRef, (snapshot) => {
+      const map = new Map(); // txnId -> payment
 
-      const data = snapshot.val();
-      let list = [];
+      if (snapshot.exists()) {
+        const data = snapshot.val();
 
-      Object.keys(data).forEach((party) => {
-        Object.keys(data[party]).forEach((date) => {
-          Object.keys(data[party][date]).forEach((key) => {
-            const p = data[party][date][key];
+        Object.entries(data).forEach(([type, names]) => {
+          Object.entries(names).forEach(([name, dates]) => {
+            Object.entries(dates).forEach(([date, items]) => {
+              Object.entries(items).forEach(([txnId, p]) => {
+                if (!p || !p.txnId) return;
 
-            list.push({
-              id: key,
-              path: `payments/${party}/${date}/${key}`,
-              date,
-              from: p.fromName,
-              to: p.toName,
-              amount: Number(p.amount).toFixed(2),
-              note: p.note || "-",
-              createdAt: p.createdAt || "",
-              type: `${p.fromType?.[0]?.toUpperCase() || "?"} - ${
-                p.toType?.[0]?.toUpperCase() || "?"
-              }`,
+                // ✅ DEDUPE BY txnId
+                if (map.has(p.txnId)) return;
+
+                map.set(p.txnId, {
+                  id: p.txnId,
+                  path: `payments/${type}/${name}/${date}/${txnId}`,
+                  date: p.date,
+                  from: p.fromName || "-",
+                  to: p.toName || "-",
+                  amount: Number(p.amount),
+                  note: p.note || "-",
+                  createdAt: p.createdAt || 0,
+                  type: `${p.fromType?.[0]?.toUpperCase()} - ${p.toType?.[0]?.toUpperCase()}`,
+                });
+              });
             });
           });
         });
-      });
+      }
 
-      list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      setPayments(list);
+      setPayments(Array.from(map.values()));
     });
 
-    return () => unsubscribe();
+    return () => unsub();
   }, []);
+
+  /* ================= HELPERS ================= */
 
   const formatDate = (d) => {
     if (!d) return "-";
     const date = new Date(d);
-    return `${date.getDate().toString().padStart(2, "0")}/${
-      (date.getMonth() + 1).toString().padStart(2, "0")
-    }/${date.getFullYear()}`;
+    if (isNaN(date)) return "-";
+    return `${date.getDate().toString().padStart(2, "0")}/${(
+      date.getMonth() + 1
+    )
+      .toString()
+      .padStart(2, "0")}/${date.getFullYear()}`;
   };
 
   const filteredPayments = filterDate
     ? payments.filter((p) => p.date === filterDate)
     : payments;
 
+  const sortedPayments = [...filteredPayments].sort(
+    (a, b) => b.createdAt - a.createdAt
+  );
+
   const handleDelete = async (path) => {
-    if (!window.confirm("Are you sure you want to delete this payment?")) return;
+    if (!window.confirm("Are you sure you want to delete this entry?")) return;
     try {
       const db = getDatabase();
       await remove(ref(db, path));
-      alert("Payment deleted successfully");
+      alert("Entry deleted successfully");
     } catch (err) {
       console.error(err);
-      alert("Error deleting payment");
+      alert("Error deleting entry");
     }
   };
 
+  /* ================= UI ================= */
+
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-2 sm:p-4 space-y-4 overflow-hidden">
-
       {/* HEADER */}
       <header className="flex items-center justify-between py-2 border-b">
         <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
@@ -114,7 +130,7 @@ export default function PaymentScreen() {
           </CardHeader>
 
           <CardContent>
-            {filteredPayments.length === 0 ? (
+            {sortedPayments.length === 0 ? (
               <div className="text-center text-muted-foreground py-6">
                 No payments found.
               </div>
@@ -134,13 +150,15 @@ export default function PaymentScreen() {
                   </thead>
 
                   <tbody>
-                    {filteredPayments.map((p) => (
+                    {sortedPayments.map((p) => (
                       <tr key={p.id} className="border-b hover:bg-muted/40">
                         <td className="px-4 py-2">{formatDate(p.date)}</td>
                         <td className="px-4 py-2">{p.from}</td>
                         <td className="px-4 py-2">{p.to}</td>
                         <td className="px-4 py-2 font-medium">{p.type}</td>
-                        <td className="px-4 py-2 font-semibold">{p.amount}</td>
+                        <td className="px-4 py-2 font-semibold">
+                          {p.amount.toFixed(2)}
+                        </td>
                         <td className="px-4 py-2">{p.note}</td>
                         <td className="px-4 py-2">
                           <Button

@@ -19,8 +19,8 @@ export default function AddExpense() {
   const [date, setDate] = useState(new Date());
   const [amount, setAmount] = useState("");
   const [expenseFor, setExpenseFor] = useState("");
-  const [category, setCategory] = useState("");
-  const [entity, setEntity] = useState("");
+  const [category, setCategory] = useState(""); // party / bank / account
+  const [entity, setEntity] = useState(""); // selected party/bank/account
 
   const [parties, setParties] = useState([]);
   const [banks, setBanks] = useState([]);
@@ -60,19 +60,14 @@ export default function AddExpense() {
             <CommandEmpty>No results found.</CommandEmpty>
             {getEntitiesByCategory()
               .filter(e => getEntityName(e).toLowerCase().includes(searchText.toLowerCase()))
-              .map(e => {
+              .map((e, idx) => {
                 const name = getEntityName(e);
                 return (
                   <CommandItem
-                    key={name}
+                    key={name || idx}
                     onSelect={() => { setEntity(name); setEntityOpen(false); setSearchText(""); }}
                   >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        entity === name ? "opacity-100" : "opacity-0"
-                      )}
-                    />
+                    <Check className={cn("mr-2 h-4 w-4", entity === name ? "opacity-100" : "opacity-0")} />
                     {name}
                   </CommandItem>
                 );
@@ -89,34 +84,45 @@ export default function AddExpense() {
     }
 
     const expenseAmount = Number(amount);
-    const dateKey = date.toISOString().split("T")[0]; // "YYYY-MM-DD"
-    const dateID = date.toISOString().replace(/[:.]/g, "-"); // unique ID
+    const expenseID = Date.now(); // unique ID for expense
 
     const expenseEntry = {
-      date: date.toISOString(),
-      amount: Number(expenseAmount.toFixed(2)), // decimal-safe
-      expenseFor,
+      amount: Number(expenseAmount.toFixed(2)),
       category,
+      date: date.toISOString(),
+      expenseFor,
       entity,
       createdAt: new Date().toISOString(),
     };
 
     try {
-      // Update entity balance
-      const balanceRef = ref(db, `${category}/${entity}/balance`);
+      // 1️⃣ Determine correct base node
+      let baseNode = "";
+      if (category === "party") baseNode = "parties";
+      if (category === "account") baseNode = "accounts";
+      if (category === "bank") baseNode = "banks";
+
+      if (!baseNode) throw new Error("Invalid category selected");
+
+      // 2️⃣ Update balance of entity
+      const balanceRef = ref(db, `${baseNode}/${entity}/balance`);
       const snap = await get(balanceRef);
       const currentBalance = snap.exists() ? Number(snap.val()) : 0;
-      const newBalance = (currentBalance - expenseAmount).toFixed(2);
-      await set(balanceRef, Number(newBalance));
+      await set(balanceRef, currentBalance - expenseAmount);
 
-      // Save expense in hierarchical structure: expenses/date/category/entity/dateID
-      await set(ref(db, `expenses/${dateKey}/${category}/${entity}/${dateID}`), expenseEntry);
+      // 3️⃣ Save expense under entity node
+      const expenseRef = ref(db, `${baseNode}/${entity}/expenses/${expenseID}`);
+      await set(expenseRef, expenseEntry);
 
-      alert("Expense saved successfully");
+      // 4️⃣ Optionally, save to global expenses node
+      const globalExpenseRef = ref(db, `expenses/${category}/${entity}/${expenseID}`);
+      await set(globalExpenseRef, expenseEntry);
+
+      alert("✅ Expense saved successfully!");
       navigate("/expense");
     } catch (err) {
-      console.error(err);
-      alert("Error saving expense");
+      console.error("Error saving expense:", err);
+      alert("❌ Error saving expense");
     }
   };
 
@@ -140,38 +146,23 @@ export default function AddExpense() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label>Date</Label>
-              <DatePicker
-                selected={date}
-                onChange={setDate}
-                className="w-full border p-2 rounded"
-              />
+              <DatePicker selected={date} onChange={setDate} className="w-full border p-2 rounded" />
             </div>
 
             <div>
               <Label>Amount</Label>
-              <Input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
+              <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
             </div>
           </div>
 
           <div>
             <Label>Expense Done For</Label>
-            <Input
-              type="text"
-              value={expenseFor}
-              onChange={(e) => setExpenseFor(e.target.value)}
-            />
+            <Input type="text" value={expenseFor} onChange={(e) => setExpenseFor(e.target.value)} />
           </div>
 
-          {/* DONE FROM TEXT */}
-        <div className="sm:col-span-2">
-            <p className="text-sm font-medium text-muted-foreground">
-            Expense Done From
-            </p>
-        </div>
+          <div className="sm:col-span-2">
+            <p className="text-sm font-medium text-muted-foreground">Expense Done From</p>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>

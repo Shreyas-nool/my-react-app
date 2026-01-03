@@ -5,7 +5,7 @@ import { Button } from "../../components/ui/button";
 
 // Firebase
 import { db } from "../../firebase";
-import { ref, push } from "firebase/database";
+import { ref, push, set } from "firebase/database";
 
 const AddParty = () => {
   const navigate = useNavigate();
@@ -21,19 +21,22 @@ const AddParty = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (!name) return alert("Party name is required!");
+
     const newParty = {
       name,
       city,
       mobile,
-      openingBalance,
+      openingBalance: Number(openingBalance) || 0,
       partyType,
-      creditPeriod, // ⭐ SAVED AS NUMBER OF DAYS
+      creditPeriod: Number(creditPeriod) || 0,
       createdAt: new Date().toISOString(),
     };
 
     try {
-      const partyRef = ref(db, "parties");
-      await push(partyRef, newParty);
+      // Use party name as child key
+      const partyRef = ref(db, `parties/${name}`);
+      await set(partyRef, newParty); // ❌ no push(), use set()
 
       alert("✅ Party saved successfully!");
       navigate("/party");
