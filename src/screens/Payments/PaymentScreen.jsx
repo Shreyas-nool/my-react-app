@@ -9,6 +9,8 @@ import {
   CardContent,
 } from "../../components/ui/card";
 import { getDatabase, ref, onValue, remove } from "firebase/database";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 export default function PaymentScreen() {
   const navigate = useNavigate();
@@ -114,11 +116,12 @@ export default function PaymentScreen() {
 
       {/* FILTER */}
       <div className="flex justify-end">
-        <input
-          type="date"
+        <DatePicker
+          selected={filterDate ? new Date(filterDate) : null}
+          onChange={(date) => setFilterDate(date ? date.toISOString().split("T")[0] : "")}
+          dateFormat="yyyy-MM-dd"
+          placeholderText="Select date"
           className="border rounded px-3 py-1 text-sm"
-          value={filterDate}
-          onChange={(e) => setFilterDate(e.target.value)}
         />
       </div>
 
