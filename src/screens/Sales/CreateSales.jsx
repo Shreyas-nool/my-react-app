@@ -51,7 +51,7 @@ const SalesInvoice = () => {
   const [searchText, setSearchText] = useState("");
   const [stockWarning, setStockWarning] = useState("");
 
-  // Fetch stocks & parties
+  // Fetch stocks & parties live
   useEffect(() => {
     const stocksRef = ref(db, "stocks");
     onValue(stocksRef, (snapshot) => {
@@ -96,31 +96,21 @@ const SalesInvoice = () => {
 
   const handleBoxChange = (value) => {
     if (!selectedStock || value < 0) return;
-
     const totalStockPieces = (Number(selectedStock.boxes) || 0) * (Number(selectedStock.piecesPerBox) || 1);
     const desiredPieces = value * (Number(selectedStock.piecesPerBox) || 1);
-
     if (desiredPieces > totalStockPieces) {
       setStockWarning(`Not enough stock! Only ${totalStockPieces} pieces available.`);
-      setBox(value);
     } else {
       setStockWarning("");
-      setBox(value);
-      setPiecesPerBox(Number(selectedStock.piecesPerBox) || 0);
     }
+    setBox(value);
   };
 
   const handleAddItem = () => {
-    if (!selectedStock || !box || !piecesPerBox || pricePerItem === "") {
-      return alert("Please fill all fields.");
-    }
-
+    if (!selectedStock || !box || !piecesPerBox || pricePerItem === "") return alert("Please fill all fields.");
     const totalStockPieces = (Number(selectedStock.boxes) || 0) * (Number(selectedStock.piecesPerBox) || 1);
     const desiredPieces = Number(box) * Number(piecesPerBox);
-
-    if (desiredPieces > totalStockPieces) {
-      return alert(`Cannot add! Only ${totalStockPieces} pieces available in stock.`);
-    }
+    if (desiredPieces > totalStockPieces) return alert(`Cannot add! Only ${totalStockPieces} pieces available in stock.`);
 
     const quantity = Number(box) * Number(piecesPerBox);
     const price = parseFloat(pricePerItem);
@@ -159,14 +149,11 @@ const SalesInvoice = () => {
       const stockRef = ref(db, `stocks/${item.dateKey}/${item.stockId}`);
       await runTransaction(stockRef, (current) => {
         if (!current) return current;
-
         let totalPiecesStock = (Number(current.boxes) || 0) * (Number(current.piecesPerBox) || 1);
         const soldPieces = (Number(item.box) || 0) * (Number(item.piecesPerBox) || 0);
         totalPiecesStock -= soldPieces;
-
         const updatedBoxes = Math.floor(totalPiecesStock / (Number(current.piecesPerBox) || 1));
         const updatedPieces = totalPiecesStock % (Number(current.piecesPerBox) || 1);
-
         return { ...current, boxes: updatedBoxes, pieces: updatedPieces };
       });
     }
@@ -181,7 +168,6 @@ const SalesInvoice = () => {
     try {
       let invoiceNumber = invoiceToEdit?.invoiceNumber;
       let saleRef;
-
       if (invoiceToEdit) {
         saleRef = ref(db, `sales/${isoDateTime}/invoice-${invoiceNumber}`);
       } else {
@@ -214,10 +200,8 @@ const SalesInvoice = () => {
 
   const totalBoxes = items.reduce((s, i) => s + Number(i.box || 0), 0);
 
-  // Filter products based on selected category
-  const filteredStocks = selectedCategory
-    ? stocks.filter((s) => s.category === selectedCategory)
-    : [];
+  // Filter products live based on selected category
+  const filteredStocks = selectedCategory ? stocks.filter((s) => s.category === selectedCategory) : [];
 
   return (
     <div className="max-w-6xl mx-auto p-6 mt-10 space-y-6">
@@ -236,15 +220,12 @@ const SalesInvoice = () => {
 
       {/* Party & Date */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        {/* Party */}
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium">Party</label>
           <Popover open={partyOpen} onOpenChange={setPartyOpen}>
             <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={`w-full justify-between px-3 text-left ${items.length > 0 ? "bg-gray-200 cursor-not-allowed" : ""}`}
-                disabled={items.length > 0}
-              >
+              <Button variant="outline" className="w-full justify-between px-3">
                 {selectedParty || "-- Choose Party --"}
                 <ChevronsUpDown className="h-4 w-4 opacity-50" />
               </Button>
@@ -254,20 +235,11 @@ const SalesInvoice = () => {
                 <CommandInput placeholder="Search party..." onValueChange={setSearchText} />
                 <CommandList>
                   <CommandEmpty>No party found.</CommandEmpty>
-                  {parties
-                    .filter((p) => (p?.name || "").toLowerCase().includes((searchText || "").toLowerCase()))
-                    .map((p, i) => (
-                      <CommandItem
-                        key={i}
-                        value={p.name}
-                        onSelect={() => {
-                          setSelectedParty(p.name);
-                          setPartyOpen(false);
-                        }}
-                      >
-                        <Check className={cn("mr-2 h-4 w-4", selectedParty === p.name ? "opacity-100" : "opacity-0")} />
-                        {p.name}
-                      </CommandItem>
+                  {parties.filter(p => (p?.name || "").toLowerCase().includes((searchText || "").toLowerCase())).map((p, i) => (
+                    <CommandItem key={i} value={p.name} onSelect={() => { setSelectedParty(p.name); setPartyOpen(false); }}>
+                      <Check className={cn("mr-2 h-4 w-4", selectedParty === p.name ? "opacity-100" : "opacity-0")} />
+                      {p.name}
+                    </CommandItem>
                   ))}
                 </CommandList>
               </Command>
@@ -275,6 +247,7 @@ const SalesInvoice = () => {
           </Popover>
         </div>
 
+        {/* Date */}
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium">Invoice Date</label>
           <DatePicker
@@ -289,10 +262,10 @@ const SalesInvoice = () => {
         </div>
       </div>
 
-      {/* Category & Product Selection */}
+      {/* Category & Product */}
       <div className="flex gap-3 mt-4 items-end w-full">
         {/* Category */}
-        <div className="sm:col-span-2 w-full flex flex-col gap-1">
+        <div className="flex flex-col gap-1 w-full">
           <label className="text-sm font-medium">Category</label>
           <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
             <PopoverTrigger asChild>
@@ -315,7 +288,7 @@ const SalesInvoice = () => {
         </div>
 
         {/* Product */}
-        <div className="sm:col-span-2 w-full flex flex-col gap-1">
+        <div className="flex flex-col gap-1 w-full">
           <label className="text-sm font-medium">Product</label>
           <Popover open={productOpen} onOpenChange={setProductOpen}>
             <PopoverTrigger asChild>
@@ -329,13 +302,11 @@ const SalesInvoice = () => {
                 <CommandInput placeholder="Search product..." onValueChange={setSearchText} />
                 <CommandList>
                   <CommandEmpty>No product found.</CommandEmpty>
-                  {filteredStocks
-                    .filter((s) => (s.productName || "").toLowerCase().includes((searchText || "").toLowerCase()))
-                    .map((s) => (
-                      <CommandItem key={s.id} onSelect={() => handleSelectStock(s)}>
-                        <Check className={cn("mr-2 h-4 w-4", selectedStock?.id === s.id ? "opacity-100" : "opacity-0")} />
-                        {s.productName}
-                      </CommandItem>
+                  {filteredStocks.filter(s => (s.productName || "").toLowerCase().includes((searchText || "").toLowerCase())).map(s => (
+                    <CommandItem key={s.id} onSelect={() => handleSelectStock(s)}>
+                      <Check className={cn("mr-2 h-4 w-4", selectedStock?.id === s.id ? "opacity-100" : "opacity-0")} />
+                      {s.productName}
+                    </CommandItem>
                   ))}
                 </CommandList>
               </Command>
@@ -343,17 +314,21 @@ const SalesInvoice = () => {
           </Popover>
         </div>
 
-        {/* Box, Pieces, Price */}
-        <div className="flex w-full flex-col gap-1">
+        {/* Box */}
+        <div className="flex flex-col gap-1 w-full">
           <label className="text-sm font-medium">Box</label>
           <Input type="number" value={box} onChange={(e) => handleBoxChange(Number(e.target.value))} />
           {stockWarning && <p className="text-red-500 text-xs mt-1">{stockWarning}</p>}
         </div>
-        <div className="flex w-full flex-col gap-1">
+
+        {/* Pieces/Box */}
+        <div className="flex flex-col gap-1 w-full">
           <label className="text-sm font-medium">Pieces/Box</label>
           <Input type="number" value={piecesPerBox} readOnly className="bg-slate-100" />
         </div>
-        <div className="flex w-full flex-col gap-1">
+
+        {/* Price */}
+        <div className="flex flex-col gap-1 w-full">
           <label className="text-sm font-medium">Price/Item</label>
           <Input type="number" step="0.01" value={pricePerItem} onChange={(e) => setPricePerItem(e.target.value)} />
         </div>
