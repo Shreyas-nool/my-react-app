@@ -1,61 +1,51 @@
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from "../../components/ui/card";
-import {
-  Table,
-  TableHeader,
-  TableRow,
-  TableHead,
-  TableBody,
-  TableCell,
-} from "../../components/ui/table";
-
-import { useEffect, useState } from "react";
 import { db } from "../../firebase";
 import { ref, onValue, set } from "firebase/database";
 
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+
 const SalesScreen = () => {
   const navigate = useNavigate();
-  const [sales, setSales] = useState([]);
-  const [searchQuery, setSearchQuery] = useState("");
 
+  const [sales, setSales] = useState([]);
+  const [partiesMap, setPartiesMap] = useState({}); // partyId -> partyName
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedDate, setSelectedDate] = useState(null);
   const [sortConfig, setSortConfig] = useState({
     key: "createdAt",
-    direction: "desc", // Latest invoice on top by default
+    direction: "desc",
   });
 
-  // Round numbers to 2 decimals
-  const round2 = (num) => Math.round((Number(num) + Number.EPSILON) * 100) / 100;
+  const round2 = (num) =>
+    Math.round((Number(num) + Number.EPSILON) * 100) / 100;
 
-  // Format ISO datetime to "dd-mm-yy hh:mm"
-  const formatDateTime = (isoString) => {
-    if (!isoString) return "";
-    const date = new Date(isoString);
-    const dd = String(date.getDate()).padStart(2, "0");
-    const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const yy = String(date.getFullYear()).slice(-2);
-    const hh = String(date.getHours()).padStart(2, "0");
-    const min = String(date.getMinutes()).padStart(2, "0");
-
-    return `${dd}-${mm}-${yy} ${hh}:${min}`;
+  const formatDate = (dateString) => {
+    if (!dateString) return "-";
+    const d = new Date(dateString);
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    return `${dd}-${mm}-${yyyy}`;
   };
 
+  /* ---------- Fetch Sales ---------- */
   useEffect(() => {
     const salesRef = ref(db, "sales");
     const unsubscribe = onValue(salesRef, (snapshot) => {
       const data = snapshot.val();
-      if (!data) return setSales([]);
+      if (!data) {
+        setSales([]);
+        return;
+      }
 
-      const allSales = [];
+      const arr = [];
       Object.entries(data).forEach(([dateKey, invoices]) => {
         Object.entries(invoices).forEach(([invoiceKey, sale]) => {
-          allSales.push({
+          arr.push({
             ...sale,
             _dateKey: dateKey,
             _invoiceKey: invoiceKey,
@@ -63,186 +53,208 @@ const SalesScreen = () => {
         });
       });
 
-      setSales(allSales);
+      setSales(arr);
     });
 
     return () => unsubscribe();
   }, []);
 
+  /* ---------- Fetch Parties (FIXED) ---------- */
+  useEffect(() => {
+    const partyRef = ref(db, "parties");
+    const unsubscribe = onValue(partyRef, (snapshot) => {
+      const data = snapshot.val();
+      if (!data) {
+        setPartiesMap({});
+        return;
+      }
+
+      const map = {};
+      Object.entries(data).forEach(([id, details]) => {
+        map[id] = details.name || "-";
+      });
+
+      setPartiesMap(map);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  /* ---------- Filters ---------- */
   const filteredSales = sales.filter((sale) => {
-    const query = searchQuery.toLowerCase();
-    return (
-      sale.invoiceNumber?.toString().includes(query) ||
-      sale.createdAt?.toLowerCase().includes(query) ||
-      sale.party?.toLowerCase().includes(query)
-    );
+    const q = searchQuery.toLowerCase();
+    const partyName = partiesMap[sale.partyId]?.toLowerCase() || "";
+
+    const matchesSearch =
+      sale.invoiceNumber?.toString().includes(q) ||
+      partyName.includes(q);
+
+    const matchesDate = selectedDate
+      ? sale.createdAt?.slice(0, 10) ===
+        selectedDate.toISOString().slice(0, 10)
+      : true;
+
+    return matchesSearch && matchesDate;
   });
 
+  /* ---------- Sorting ---------- */
   const sortedSales = [...filteredSales].sort((a, b) => {
-    if (!sortConfig.key) return 0;
+    let aVal, bVal;
 
-    let aValue = a[sortConfig.key];
-    let bValue = b[sortConfig.key];
-
-    // Compare as timestamp if sorting by date
-    if (sortConfig.key === "createdAt") {
-      aValue = new Date(aValue).getTime();
-      bValue = new Date(bValue).getTime();
+    if (sortConfig.key === "party") {
+      aVal = partiesMap[a.partyId] || "";
+      bVal = partiesMap[b.partyId] || "";
+    } else if (sortConfig.key === "createdAt") {
+      aVal = new Date(a.createdAt).getTime();
+      bVal = new Date(b.createdAt).getTime();
+    } else {
+      aVal = a[sortConfig.key];
+      bVal = b[sortConfig.key];
     }
 
-    if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1;
-    if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
+    if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
+    if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
     return 0;
   });
 
   const handleSort = (key) => {
-    setSortConfig((prev) => {
-      if (prev.key === key) {
-        return {
-          key,
-          direction: prev.direction === "asc" ? "desc" : "asc",
-        };
-      } else {
-        return { key, direction: "asc" };
-      }
-    });
-  };
-
-  const deleteInvoice = (sale) => {
-    if (!confirm("Delete this invoice?")) return;
-
-    const delRef = ref(db, `sales/${sale._dateKey}/${sale._invoiceKey}`);
-
-    set(delRef, null)
-      .then(() => alert("Invoice deleted"))
-      .catch((err) => alert("Error: " + err.message));
+    setSortConfig((prev) =>
+      prev.key === key
+        ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: "asc" }
+    );
   };
 
   const renderSortIcon = (key) => {
     if (sortConfig.key !== key) return null;
     return sortConfig.direction === "asc" ? (
-      <ChevronUp className="inline-block ml-1 h-3 w-3" />
+      <ChevronUp className="inline h-4 w-4 ml-1" />
     ) : (
-      <ChevronDown className="inline-block ml-1 h-3 w-3" />
+      <ChevronDown className="inline h-4 w-4 ml-1" />
     );
   };
 
+  const deleteInvoice = (sale) => {
+    if (!window.confirm("Delete this invoice?")) return;
+    const delRef = ref(db, `sales/${sale._dateKey}/${sale._invoiceKey}`);
+    set(delRef, null);
+  };
+
+  /* ---------- UI ---------- */
   return (
-    <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-1 sm:p-4 space-y-2 sm:space-y-4 overflow-hidden">
-      <header className="flex items-center justify-between py-2 border-b">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+    <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
+      {/* Header */}
+      <div className="relative border-b pb-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/")}
+          className="absolute left-0 top-0 h-9 w-9 p-0"
+        >
           <ArrowLeft className="h-4 w-4" />
         </Button>
 
-        <div className="flex-1 text-center">
-          <h1 className="text-lg sm:text-xl font-semibold">Sales List</h1>
-        </div>
-
-        <Button onClick={() => navigate("/sales/create-sales")}>
-          <Plus className="h-4 w-4" /> Create Sales
+        <Button
+          onClick={() => navigate("/sales/create-sales")}
+          className="absolute right-0 top-0 h-9 text-sm"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Create Sales
         </Button>
-      </header>
 
-      <div className="flex justify-end">
+        <h1 className="text-xl font-semibold text-center">
+          Sales Invoices
+        </h1>
+      </div>
+
+      {/* Filters */}
+      <div className="flex justify-center gap-4">
+        <DatePicker
+          selected={selectedDate}
+          onChange={(date) => setSelectedDate(date)}
+          dateFormat="dd-MM-yyyy"
+          placeholderText="Select date"
+          className="border border-gray-400 rounded px-3 py-2 text-base text-center"
+          isClearable
+        />
         <input
           type="text"
           placeholder="Search invoices..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full sm:w-1/3"
+          className="border border-gray-400 rounded px-3 py-2 text-base w-60"
         />
       </div>
 
-      <main className="flex-1 overflow-y-auto">
-        <Card className="max-w-7xl mx-auto">
-          <CardHeader>
-            <CardTitle>Sales Invoices</CardTitle>
-          </CardHeader>
-
-          <CardContent>
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full table-auto border border-gray-300 text-center">
+          <thead>
+            <tr className="bg-gray-100 text-base">
+              <th className="border p-3 cursor-pointer" onClick={() => handleSort("createdAt")}>
+                Invoice Date {renderSortIcon("createdAt")}
+              </th>
+              <th className="border p-3 cursor-pointer" onClick={() => handleSort("invoiceNumber")}>
+                Invoice No {renderSortIcon("invoiceNumber")}
+              </th>
+              <th className="border p-3 cursor-pointer" onClick={() => handleSort("party")}>
+                Party {renderSortIcon("party")}
+              </th>
+              <th className="border p-3">Total</th>
+              <th className="border p-3">Action</th>
+            </tr>
+          </thead>
+          <tbody>
             {sortedSales.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No invoices found.
-              </div>
+              <tr>
+                <td colSpan={5} className="p-6">
+                  No invoices found.
+                </td>
+              </tr>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead
-                        className="cursor-pointer"
-                        onClick={() => handleSort("createdAt")}
+              sortedSales.map((sale) => {
+                const totalAmount = round2(
+                  sale.items.reduce(
+                    (sum, item) => sum + Number(item.total || 0),
+                    0
+                  )
+                );
+
+                return (
+                  <tr key={sale._invoiceKey} className="hover:bg-gray-50 text-base">
+                    <td className="border p-3">{formatDate(sale.createdAt)}</td>
+                    <td className="border p-3">
+                      <button
+                        className="text-blue-600 underline"
+                        onClick={() =>
+                          navigate("/sales/view-invoice", { state: sale })
+                        }
                       >
-                        Invoice Date {renderSortIcon("createdAt")}
-                      </TableHead>
-
-                      <TableHead
-                        className="cursor-pointer"
-                        onClick={() => handleSort("invoiceNumber")}
+                        {sale.invoiceNumber}
+                      </button>
+                    </td>
+                    <td className="border p-3">
+                      {partiesMap[sale.partyId] || "-"}
+                    </td>
+                    <td className="border p-3">
+                      {totalAmount.toFixed(2)}
+                    </td>
+                    <td className="border p-3">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => deleteInvoice(sale)}
                       >
-                        Invoice No. {renderSortIcon("invoiceNumber")}
-                      </TableHead>
-
-                      <TableHead
-                        className="cursor-pointer"
-                        onClick={() => handleSort("party")}
-                      >
-                        Party {renderSortIcon("party")}
-                      </TableHead>
-
-                      <TableHead>Total</TableHead>
-                      <TableHead>Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-
-                  <TableBody>
-                    {sortedSales.map((sale) => {
-                      const totalAmount = round2(
-                        sale.items.reduce(
-                          (sum, item) => sum + Number(item.total || 0),
-                          0
-                        )
-                      );
-
-                      return (
-                        <TableRow key={sale._invoiceKey}>
-                          <TableCell>{formatDateTime(sale.createdAt)}</TableCell>
-
-                          <TableCell>
-                            <button
-                              className="text-blue-600 hover:underline"
-                              onClick={() =>
-                                navigate("/sales/view-invoice", {
-                                  state: sale,
-                                })
-                              }
-                            >
-                              {sale.invoiceNumber}
-                            </button>
-                          </TableCell>
-
-                          <TableCell>{sale.party}</TableCell>
-
-                          <TableCell>{totalAmount.toFixed(2)}</TableCell>
-
-                          <TableCell>
-                            <button
-                              onClick={() => deleteInvoice(sale)}
-                              className="flex items-center justify-center p-2 bg-red-600 text-white rounded hover:bg-red-700"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })
             )}
-          </CardContent>
-        </Card>
-      </main>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

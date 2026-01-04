@@ -1,26 +1,46 @@
-import React, { useRef } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { ArrowLeft, Edit, Printer } from "lucide-react";
+import { db } from "../../firebase";
+import { ref, onValue } from "firebase/database";
 
-/* Date formatter */
+/* Date formatter → DD-MM-YYYY */
 const formatDate = (dateString) => {
   if (!dateString) return "-";
   const date = new Date(dateString);
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const yy = String(date.getFullYear()).slice(-2);
-  return `${dd}-${mm}-${yy}`;
+  const yyyy = date.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
 };
 
-/* Price formatting */
-const formatPrice = (value) => Number(value || 0).toFixed(2);
-const formatTotal = (value) => Number(value || 0).toFixed(2);
+/* Price formatting for display */
+const formatPrice = (value) => {
+  const v = Number(value || 0);
+  return v !== 0 && v < 0.01 ? v.toFixed(4) : v.toFixed(2);
+};
 
 export default function ViewInvoice() {
   const navigate = useNavigate();
   const { state: sale } = useLocation();
   const printRef = useRef();
+
+  const [partyData, setPartyData] = useState(null);
+
+  // Fetch party details based on sale.partyId
+  useEffect(() => {
+    if (!sale?.partyId) return;
+
+    const partyRef = ref(db, `parties/${sale.partyId}`);
+    const unsubscribe = onValue(partyRef, (snapshot) => {
+      const data = snapshot.val();
+      if (!data) return;
+      setPartyData(data);
+    });
+
+    return () => unsubscribe();
+  }, [sale?.partyId]);
 
   if (!sale) {
     return (
@@ -44,10 +64,10 @@ export default function ViewInvoice() {
     0
   );
 
+  /* Print */
   const handlePrint = () => {
     const printContent = printRef.current.innerHTML;
     const originalContent = document.body.innerHTML;
-
     document.body.innerHTML = printContent;
     window.print();
     document.body.innerHTML = originalContent;
@@ -78,32 +98,52 @@ export default function ViewInvoice() {
       </div>
 
       {/* Invoice Content */}
-      <div ref={printRef} className="bg-white shadow-lg border p-6">
+      <div ref={printRef} className="bg-white border shadow-md p-6">
         {/* Header */}
-        <header className="mb-6 relative">
-          <h1 className="text-2xl font-bold">{sale.party}</h1>
-          <span className="absolute left-1/2 top-0 transform -translate-x-1/2 text-lg font-semibold">
-            Sales Invoice
-          </span>
+        <header className="mb-6 relative text-center">
+          {/* Party Name + City */}
+          <div className="text-left">
+            <h1 className="text-2xl font-bold">
+              {partyData?.name || "-"}
+            </h1>
+            <p className="text-sm text-gray-600 mt-1">
+              {partyData?.city || "-"}
+            </p>
+            <p className="text-sm text-gray-600 mt-1">
+              <strong>Mobile:</strong> {partyData?.mobile || "-"}
+            </p>
+          </div>
+
+          {/* Centered Invoice Title */}
+          <div className="absolute left-1/2 top-0 transform -translate-x-1/2">
+            <h2 className="text-xl font-semibold">Sales Invoice</h2>
+          </div>
         </header>
 
         {/* Invoice Info */}
         <section className="flex justify-between mb-6 text-sm">
           <div>
-            <p><strong>Invoice #:</strong> {sale.invoiceNumber}</p>
-            <p><strong>Date:</strong> {formatDate(sale.createdAt)}</p>
+            <p>
+              <strong>Invoice #:</strong> {sale.invoiceNumber}
+            </p>
+            <p>
+              <strong>Invoice Date:</strong> {formatDate(sale.createdAt)}
+            </p>
+            <p>
+              <strong>Due Date:</strong> {formatDate(sale.dueDate)}
+            </p>
           </div>
         </section>
 
         {/* Table */}
-        <table className="w-full border text-sm text-center">
+        <table className="w-full border border-collapse text-sm text-center">
           <thead className="bg-gray-100">
             <tr>
               <th className="border p-2">SR</th>
               <th className="border p-2">Category</th>
               <th className="border p-2">Product</th>
               <th className="border p-2">Box</th>
-              <th className="border p-2">Pcs/Box</th>
+              <th className="border p-2">Pcs / Box</th>
               <th className="border p-2">Price</th>
               <th className="border p-2">Total</th>
             </tr>
@@ -117,12 +157,8 @@ export default function ViewInvoice() {
                 <td className="border p-2">{item.productName}</td>
                 <td className="border p-2">{item.box}</td>
                 <td className="border p-2">{item.piecesPerBox}</td>
-                <td className="border p-2">
-                  {formatPrice(item.pricePerItem)}
-                </td>
-                <td className="border p-2">
-                  {formatTotal(item.total)}
-                </td>
+                <td className="border p-2">{formatPrice(item.pricePerItem)}</td>
+                <td className="border p-2">{formatPrice(item.total)}</td>
               </tr>
             ))}
           </tbody>
@@ -135,9 +171,7 @@ export default function ViewInvoice() {
               <td className="border p-2">{totalBoxes}</td>
               <td className="border p-2"></td>
               <td className="border p-2 text-right">Invoice Total</td>
-              <td className="border p-2">
-                {formatTotal(invoiceTotal)}
-              </td>
+              <td className="border p-2">{formatPrice(invoiceTotal)}</td>
             </tr>
           </tfoot>
         </table>

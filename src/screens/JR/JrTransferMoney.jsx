@@ -18,7 +18,7 @@ import { toast } from "react-toastify";
 
 export default function JrTransferMoney() {
   const navigate = useNavigate();
-  const CURRENT_BANK = "JR";
+  const CURRENT_ACCOUNT = "JR";
 
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
@@ -33,18 +33,54 @@ export default function JrTransferMoney() {
 
   const [balance, setBalance] = useState(0);
 
-  // ---------------- FETCH DATA ----------------
+  // ---------------- FETCH & FLATTEN DATA ----------------
   useEffect(() => {
-    onValue(ref(db, "banks"), (s) => setBanks(s.exists() ? Object.values(s.val()) : []));
-    onValue(ref(db, "accounts"), (s) => setAccounts(s.exists() ? Object.values(s.val()) : []));
-    onValue(ref(db, "parties"), (s) => setParties(s.exists() ? Object.values(s.val()) : []));
+    // BANKS
+    onValue(ref(db, "banks"), (snap) => {
+      if (!snap.exists()) return setBanks([]);
 
-    // JR balance
+      const list = [];
+      Object.entries(snap.val()).forEach(([bankName, ids]) => {
+        Object.entries(ids).forEach(([id, data]) => {
+          list.push({ ...data, id, name: bankName });
+        });
+      });
+      setBanks(list);
+    });
+
+    // ACCOUNTS
+    onValue(ref(db, "accounts"), (snap) => {
+      if (!snap.exists()) return setAccounts([]);
+
+      const list = [];
+      Object.entries(snap.val()).forEach(([accName, ids]) => {
+        Object.entries(ids).forEach(([id, data]) => {
+          list.push({ ...data, id, name: accName });
+        });
+      });
+      setAccounts(list);
+    });
+
+    // PARTIES
+    onValue(ref(db, "parties"), (snap) => {
+      if (!snap.exists()) return setParties([]);
+
+      const list = [];
+      Object.entries(snap.val()).forEach(([partyName, ids]) => {
+        Object.entries(ids).forEach(([id, data]) => {
+          list.push({ ...data, id, name: partyName });
+        });
+      });
+      setParties(list);
+    });
+
+    // JR BALANCE
     onValue(ref(db, "accounts/JR/balance"), (s) => {
       setBalance(s.exists() ? Number(s.val()) : 0);
     });
   }, []);
 
+  // ---------------- SUBMIT ----------------
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -57,29 +93,28 @@ export default function JrTransferMoney() {
     const time = Date.now();
 
     try {
-      // ---------------- JR BALANCE ----------------
-      const jrRef = ref(db, "accounts/JR/balance");
-      const jrSnap = await get(jrRef);
-      const jrBal = jrSnap.exists() ? jrSnap.val() : 0;
+      // JR balance check
+      const jrBalRef = ref(db, "accounts/JR/balance");
+      const jrSnap = await get(jrBalRef);
+      const jrBal = jrSnap.exists() ? Number(jrSnap.val()) : 0;
 
       if (jrBal < amt) {
         toast.error("Insufficient balance");
         return;
       }
 
-      await set(jrRef, jrBal - amt);
+      await set(jrBalRef, jrBal - amt);
 
-      // ---------------- DESTINATION BALANCE ----------------
+      // Destination balance
       const map = { bank: "banks", account: "accounts", party: "parties" };
-      const targetRef = ref(db, `${map[toType]}/${toName}/balance`);
-      const targetSnap = await get(targetRef);
-      const targetBal = targetSnap.exists() ? targetSnap.val() : 0;
-      await set(targetRef, targetBal + amt);
+      const destBalRef = ref(db, `${map[toType]}/${toName}/balance`);
+      const destSnap = await get(destBalRef);
+      const destBal = destSnap.exists() ? Number(destSnap.val()) : 0;
 
-      // ---------------- CREATE PAYMENT ENTRY (Like before) ----------------
-      // 1️⃣ JR sends payment
-      const jrPaymentRef = ref(db, `payments/JR/${date}`);
-      await push(jrPaymentRef, {
+      await set(destBalRef, destBal + amt);
+
+      // Payments
+      await push(ref(db, `payments/JR/${date}`), {
         amount: amt,
         date,
         fromName: "JR",
@@ -91,9 +126,7 @@ export default function JrTransferMoney() {
         txnId: time,
       });
 
-      // 2️⃣ Destination receives payment
-      const destPaymentRef = ref(db, `payments/${toName}/${date}`);
-      await push(destPaymentRef, {
+      await push(ref(db, `payments/${toName}/${date}`), {
         amount: amt,
         date,
         fromName: "JR",
@@ -105,7 +138,7 @@ export default function JrTransferMoney() {
         txnId: time,
       });
 
-      // ---------------- TRANSFER HISTORY ----------------
+      // Transfer history
       await push(ref(db, `transfers/${toType}/${toName}/${date}`), {
         from: "JR",
         toType,
@@ -131,42 +164,37 @@ export default function JrTransferMoney() {
   };
 
   return (
-    <div className="flex flex-col max-w-3xl mx-auto mt-10 p-4 space-y-6 bg-background">
+    <div className="flex flex-col max-w-3xl mx-auto mt-10 p-4 space-y-6">
       {/* Header */}
       <header className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate("/jr")}
-          className="h-8 w-8 p-0 hover:bg-accent"
-        >
+        <Button variant="ghost" size="sm" onClick={() => navigate("/jr")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-lg font-semibold text-foreground/90">Transfer Money</h1>
+        <h1 className="text-lg font-semibold">Transfer Money</h1>
       </header>
 
-      {/* Current Balance */}
-      <div className="bg-white p-4 rounded-2xl shadow-md border border-gray-100 text-gray-800 font-semibold text-lg">
+      {/* Balance */}
+      <div className="bg-white p-4 rounded-2xl shadow border font-semibold text-lg">
         JR Balance: ₹{balance.toFixed(2)}
       </div>
 
       {/* Form */}
       <form
         onSubmit={handleSubmit}
-        className="bg-white p-6 rounded-2xl shadow-md space-y-4 border border-gray-100"
+        className="bg-white p-6 rounded-2xl shadow space-y-4"
       >
-        {/* From + To Type + Select Type row */}
         <div className="flex gap-3">
-          {/* From */}
-          <div className="flex-1 flex flex-col space-y-1">
-            <label className="text-sm font-medium text-gray-700">From</label>
+          <div className="flex-1">
+            <label className="text-sm font-medium">From</label>
             <Input value="JR" disabled />
           </div>
 
-          {/* Transfer To Type */}
-          <div className="flex-1 flex flex-col space-y-1">
-            <label className="text-sm font-medium text-gray-700">Transfer To Type</label>
-            <Select value={toType} onValueChange={setToType}>
+          <div className="flex-1">
+            <label className="text-sm font-medium">Transfer To Type</label>
+            <Select value={toType} onValueChange={(v) => {
+              setToType(v);
+              setToName("");
+            }}>
               <SelectTrigger>
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
@@ -178,18 +206,17 @@ export default function JrTransferMoney() {
             </Select>
           </div>
 
-          {/* Select {type} */}
           {toType && (
-            <div className="flex-1 flex flex-col space-y-1">
-              <label className="text-sm font-medium text-gray-700">Select {toType}</label>
+            <div className="flex-1">
+              <label className="text-sm font-medium">Select {toType}</label>
               <Select value={toName} onValueChange={setToName}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select" />
                 </SelectTrigger>
                 <SelectContent>
-                  {getOptions().map((i, idx) => (
-                    <SelectItem key={idx} value={i.name || i.bankName}>
-                      {i.name || i.bankName}
+                  {getOptions().map((item) => (
+                    <SelectItem key={item.id} value={item.name}>
+                      {item.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -198,14 +225,14 @@ export default function JrTransferMoney() {
           )}
         </div>
 
-        {/* Date + Amount row */}
         <div className="flex gap-3">
-          <div className="flex-1 flex flex-col space-y-1">
-            <label className="text-sm font-medium text-gray-700">Date</label>
+          <div className="flex-1">
+            <label className="text-sm font-medium">Date</label>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
-          <div className="flex-1 flex flex-col space-y-1">
-            <label className="text-sm font-medium text-gray-700">Amount</label>
+
+          <div className="flex-1">
+            <label className="text-sm font-medium">Amount</label>
             <Input
               type="number"
               value={amount}
@@ -215,18 +242,20 @@ export default function JrTransferMoney() {
           </div>
         </div>
 
-        {/* Notes */}
-        <div className="flex flex-col space-y-1">
-          <label className="text-sm font-medium text-gray-700">Notes</label>
-          <Textarea placeholder="Optional notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <div>
+          <label className="text-sm font-medium">Notes</label>
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Optional notes"
+          />
         </div>
 
-        {/* Buttons */}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => navigate("/jr")}>
             Cancel
           </Button>
-          <Button className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded hover:bg-gray-800">
+          <Button className="bg-black text-white hover:bg-gray-800">
             Submit
           </Button>
         </div>

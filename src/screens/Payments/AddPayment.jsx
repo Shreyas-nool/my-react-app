@@ -26,12 +26,14 @@ export default function AddPayment() {
   const navigate = useNavigate();
 
   const [date, setDate] = useState(new Date());
-  const [fromType, setFromType] = useState("");
-  const [fromName, setFromName] = useState("");
-  const [toType, setToType] = useState("");
-  const [toName, setToName] = useState("");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+
+  const [fromType, setFromType] = useState("");
+  const [toType, setToType] = useState("");
+
+  const [fromEntity, setFromEntity] = useState(null);
+  const [toEntity, setToEntity] = useState(null);
 
   const [parties, setParties] = useState([]);
   const [banks, setBanks] = useState([]);
@@ -44,30 +46,67 @@ export default function AddPayment() {
 
   /* ---------------- LOAD ENTITIES ---------------- */
   useEffect(() => {
-    get(ref(db, "parties")).then(
-      (s) => s.exists() && setParties(Object.values(s.val()))
-    );
-    get(ref(db, "banks")).then(
-      (s) => s.exists() && setBanks(Object.values(s.val()))
-    );
-    get(ref(db, "accounts")).then(
-      (s) => s.exists() && setAccounts(Object.values(s.val()))
-    );
+    const loadParties = async () => {
+      const snap = await get(ref(db, "parties"));
+      if (!snap.exists()) return;
+
+      const list = [];
+      Object.entries(snap.val()).forEach(([partyName, ids]) => {
+        Object.entries(ids).forEach(([id, data]) => {
+          list.push({
+            id,
+            parentKey: partyName,
+            name: data.name,
+          });
+        });
+      });
+      setParties(list);
+    };
+
+    const loadBanks = async () => {
+      const snap = await get(ref(db, "banks"));
+      if (!snap.exists()) return;
+
+      const list = [];
+      Object.entries(snap.val()).forEach(([bankName, ids]) => {
+        Object.entries(ids).forEach(([id]) => {
+          list.push({
+            id,
+            parentKey: bankName,
+            name: bankName,
+          });
+        });
+      });
+      setBanks(list);
+    };
+
+    const loadAccounts = async () => {
+      const snap = await get(ref(db, "accounts"));
+      if (!snap.exists()) return;
+
+      const list = [];
+      Object.entries(snap.val()).forEach(([accName, ids]) => {
+        Object.entries(ids).forEach(([id]) => {
+          list.push({
+            id,
+            parentKey: accName,
+            name: accName,
+          });
+        });
+      });
+      setAccounts(list);
+    };
+
+    loadParties();
+    loadBanks();
+    loadAccounts();
   }, []);
 
-  const getEntitiesByType = (type) => {
+  const getListByType = (type) => {
     if (type === "party") return parties;
     if (type === "bank") return banks;
     if (type === "account") return accounts;
     return [];
-  };
-
-  const getEntityName = (type, entity) => {
-    if (!entity) return "";
-    if (type === "party") return entity.name || "";
-    if (type === "bank") return entity.bankName || "";
-    if (type === "account") return entity.name || entity.accountName || "";
-    return "";
   };
 
   const renderDropdown = (
@@ -82,12 +121,12 @@ export default function AddPayment() {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" className="w-full justify-between">
-          {value || "Select"}
+          {value?.name || "Select"}
           <ChevronsUpDown className="h-4 w-4 opacity-50" />
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent className="p-0 w-[240px]">
+      <PopoverContent className="p-0 w-[260px]">
         <Command>
           <CommandInput
             placeholder="Search..."
@@ -95,34 +134,29 @@ export default function AddPayment() {
             onValueChange={setSearch}
           />
           <CommandList>
-            <CommandEmpty>No result</CommandEmpty>
-            {getEntitiesByType(type)
+            <CommandEmpty>No results</CommandEmpty>
+            {getListByType(type)
               .filter((e) =>
-                getEntityName(type, e)
-                  .toLowerCase()
-                  .includes(search.toLowerCase())
+                e.name.toLowerCase().includes(search.toLowerCase())
               )
-              .map((e) => {
-                const name = getEntityName(type, e);
-                return (
-                  <CommandItem
-                    key={name}
-                    onSelect={() => {
-                      setValue(name);
-                      setOpen(false);
-                      setSearch("");
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        value === name ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    {name}
-                  </CommandItem>
-                );
-              })}
+              .map((e) => (
+                <CommandItem
+                  key={e.id}
+                  onSelect={() => {
+                    setValue(e);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value?.id === e.id ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {e.name}
+                </CommandItem>
+              ))}
           </CommandList>
         </Command>
       </PopoverContent>
@@ -133,7 +167,7 @@ export default function AddPayment() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!fromType || !fromName || !toType || !toName || !amount) {
+    if (!fromType || !toType || !fromEntity || !toEntity || !amount) {
       alert("Fill all fields");
       return;
     }
@@ -142,57 +176,50 @@ export default function AddPayment() {
     const dateKey = date.toISOString().split("T")[0];
     const txnId = Date.now().toString();
 
-    const payload = {
-      txnId,
-      fromType,
-      fromName,
-      toType,
-      toName,
-      amount: amt,
-      date: dateKey,
-      note: note || "-",
-      createdAt: Date.now(),
-    };
-
     const nodeMap = {
       party: "parties",
       bank: "banks",
       account: "accounts",
     };
 
-    const updateBalance = async (type, name, delta) => {
-      const balRef = ref(db, `${nodeMap[type]}/${name}/balance`);
+    const payload = {
+      txnId,
+      fromType,
+      fromName: fromEntity.name,
+      toType,
+      toName: toEntity.name,
+      amount: amt,
+      date: dateKey,
+      note: note || "-",
+      createdAt: Date.now(),
+    };
+
+    const updateBalance = async (type, entity, delta) => {
+      const balRef = ref(
+        db,
+        `${nodeMap[type]}/${entity.parentKey}/${entity.id}/balance`
+      );
       const snap = await get(balRef);
       const current = snap.exists() ? Number(snap.val()) : 0;
       await set(balRef, current + delta);
     };
 
-    const saveEntry = async (type, name) => {
+    const saveEntry = async (type, entity) => {
       await set(
-        ref(db, `${nodeMap[type]}/${name}/entries/${dateKey}/${txnId}`),
-        payload
-      );
-    };
-
-    const savePaymentLedger = async (type, name) => {
-      await set(
-        ref(db, `payments/${type}/${name}/${dateKey}/${txnId}`),
+        ref(
+          db,
+          `${nodeMap[type]}/${entity.parentKey}/${entity.id}/entries/${dateKey}/${txnId}`
+        ),
         payload
       );
     };
 
     try {
-      /* 1️⃣ BALANCES */
-      await updateBalance(fromType, fromName, -amt);
-      await updateBalance(toType, toName, amt);
+      await updateBalance(fromType, fromEntity, -amt);
+      await updateBalance(toType, toEntity, amt);
 
-      /* 2️⃣ ENTITY ENTRIES */
-      await saveEntry(fromType, fromName);
-      await saveEntry(toType, toName);
-
-      /* 3️⃣ PAYMENTS (GLOBAL LEDGER) */
-      await savePaymentLedger(fromType, fromName);
-      await savePaymentLedger(toType, toName);
+      await saveEntry(fromType, fromEntity);
+      await saveEntry(toType, toEntity);
 
       alert("Transaction Added Successfully");
       navigate("/payment");
@@ -244,7 +271,7 @@ export default function AddPayment() {
                     value={fromType}
                     onChange={(e) => {
                       setFromType(e.target.value);
-                      setFromName("");
+                      setFromEntity(null);
                     }}
                   >
                     <option value="">Select</option>
@@ -253,14 +280,13 @@ export default function AddPayment() {
                     <option value="account">Account</option>
                   </select>
                 </div>
-
                 <div>
                   <label>From</label>
                   {fromType &&
                     renderDropdown(
                       fromType,
-                      fromName,
-                      setFromName,
+                      fromEntity,
+                      setFromEntity,
                       fromOpen,
                       setFromOpen,
                       fromSearch,
@@ -277,7 +303,7 @@ export default function AddPayment() {
                     value={toType}
                     onChange={(e) => {
                       setToType(e.target.value);
-                      setToName("");
+                      setToEntity(null);
                     }}
                   >
                     <option value="">Select</option>
@@ -286,14 +312,13 @@ export default function AddPayment() {
                     <option value="account">Account</option>
                   </select>
                 </div>
-
                 <div>
                   <label>To</label>
                   {toType &&
                     renderDropdown(
                       toType,
-                      toName,
-                      setToName,
+                      toEntity,
+                      setToEntity,
                       toOpen,
                       setToOpen,
                       toSearch,

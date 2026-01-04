@@ -5,7 +5,8 @@ import { Button } from "../../components/ui/button";
 
 // Firebase
 import { db } from "../../firebase";
-import { ref, push, set } from "firebase/database";
+import { ref, set } from "firebase/database";
+import { v4 as uuidv4 } from "uuid";
 
 const AddParty = () => {
   const navigate = useNavigate();
@@ -15,145 +16,142 @@ const AddParty = () => {
   const [mobile, setMobile] = useState("");
   const [openingBalance, setOpeningBalance] = useState("");
   const [partyType, setPartyType] = useState("Customer");
-
-  const [creditPeriod, setCreditPeriod] = useState(""); // ⭐ NEW FIELD
+  const [creditPeriod, setCreditPeriod] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!name) return alert("Party name is required!");
+    if (!name.trim()) {
+      alert("Party name is required");
+      return;
+    }
 
-    const newParty = {
-      name,
-      city,
-      mobile,
-      openingBalance: Number(openingBalance) || 0,
+    const partyId = uuidv4();
+
+    // IMPORTANT LOGIC
+    // User enters amount party owes us → store as positive openingBalance
+    // Live balance must start NEGATIVE
+    const openingBal = Number(openingBalance) || 0;
+
+    const partyData = {
+      id: partyId,
+      name: name.trim(),
+      city: city.trim(),
+      mobile: mobile.trim(),
       partyType,
       creditPeriod: Number(creditPeriod) || 0,
+
+      openingBalance: openingBal,   // reference only
+      balance: -openingBal,         // LIVE balance (correct accounting)
+
       createdAt: new Date().toISOString(),
+      entries: {}                   // future transactions go here
     };
 
     try {
-      // Use party name as child key
-      const partyRef = ref(db, `parties/${name}`);
-      await set(partyRef, newParty); // ❌ no push(), use set()
-
-      alert("✅ Party saved successfully!");
+      await set(ref(db, `parties/${partyId}`), partyData);
+      alert("✅ Party added successfully");
       navigate("/party");
-    } catch (error) {
-      console.error("Error saving party:", error);
-      alert("❌ Failed to save party.");
+    } catch (err) {
+      console.error(err);
+      alert("❌ Failed to add party");
     }
   };
 
   return (
-    <div className="flex flex-col max-w-3xl mx-auto mt-10 bg-background p-4 sm:p-6 space-y-6">
-
+    <div className="flex flex-col max-w-3xl mx-auto mt-10 bg-background p-4 space-y-6">
       {/* Header */}
-      <header className="flex items-center justify-between py-2 sm:py-3 border-b border-border/50">
+      <header className="flex items-center border-b pb-3">
         <Button
           variant="ghost"
-          size="sm"
+          size="icon"
           onClick={() => navigate("/party")}
-          className="h-8 w-8 sm:h-9 sm:w-9 p-0 sm:p-2 hover:bg-accent"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft size={18} />
         </Button>
 
-        <div className="flex-1 text-center">
-          <h1 className="text-lg sm:text-xl font-semibold text-foreground/90">
-            Add Party
-          </h1>
-        </div>
-
-        <div className="w-8 sm:w-9" />
+        <h1 className="flex-1 text-center text-lg font-semibold">
+          Add Party
+        </h1>
       </header>
 
       {/* Form */}
-      <div className="bg-white shadow-md rounded-md p-6">
+      <div className="bg-white shadow rounded p-6">
         <form onSubmit={handleSubmit} className="space-y-4">
 
           {/* Name */}
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium">Name</label>
+          <div>
+            <label className="text-sm font-medium">Party Name</label>
             <input
-              type="text"
+              className="w-full border rounded p-2"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border border-gray-300 rounded p-2"
               required
             />
           </div>
 
           {/* City */}
-          <div className="flex flex-col gap-1">
+          <div>
             <label className="text-sm font-medium">City</label>
             <input
-              type="text"
+              className="w-full border rounded p-2"
               value={city}
               onChange={(e) => setCity(e.target.value)}
-              className="w-full border border-gray-300 rounded p-2"
             />
           </div>
 
           {/* Mobile */}
-          <div className="flex flex-col gap-1">
+          <div>
             <label className="text-sm font-medium">Mobile</label>
             <input
-              type="text"
+              className="w-full border rounded p-2"
               value={mobile}
               onChange={(e) => setMobile(e.target.value)}
-              className="w-full border border-gray-300 rounded p-2"
             />
           </div>
 
           {/* Opening Balance */}
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium">Opening Balance</label>
+          <div>
+            <label className="text-sm font-medium">
+              Opening Balance (Party owes you)
+            </label>
             <input
               type="number"
+              step="0.01"
+              className="w-full border rounded p-2"
               value={openingBalance}
               onChange={(e) => setOpeningBalance(e.target.value)}
-              className="w-full border border-gray-300 rounded p-2"
+              placeholder="Eg: 200.00"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              This amount will be stored as negative balance internally
+            </p>
+          </div>
+
+          {/* Credit Period */}
+          <div>
+            <label className="text-sm font-medium">Credit Period (days)</label>
+            <input
+              type="number"
+              min="0"
+              className="w-full border rounded p-2"
+              value={creditPeriod}
+              onChange={(e) => setCreditPeriod(e.target.value)}
             />
           </div>
 
-          {/* ⭐ CREDIT PERIOD (number + "days") */}
-          <div className="flex flex-col gap-1">
-  <label className="text-sm font-medium">Credit Period</label>
-
-  <div className="relative w-full">
-    <input
-      type="number"
-      min="0"
-      step="5"                     // ⭐ INCREASE BY 5 DAYS EACH STEP
-      value={creditPeriod}
-      onChange={(e) => setCreditPeriod(e.target.value)}
-      className="w-full border border-gray-300 rounded p-2 pr-14"
-      placeholder="Enter credit period"
-    />
-
-    {/* Days label inside input */}
-    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm pointer-events-none">
-      days
-    </span>
-  </div>
-</div>
-
-
           {/* Party Type */}
           <div>
-            <label className="block text-sm font-medium mb-1">Party Type</label>
-            <div className="flex items-center space-x-4">
+            <label className="text-sm font-medium block mb-1">Party Type</label>
+            <div className="flex gap-4">
               {["Customer", "Vendor", "Supplier"].map((type) => (
-                <label key={type} className="flex items-center space-x-2">
+                <label key={type} className="flex items-center gap-2">
                   <input
                     type="radio"
-                    value={type}
                     checked={partyType === type}
-                    onChange={(e) => setPartyType(e.target.value)}
+                    onChange={() => setPartyType(type)}
                   />
-                  <span>{type}</span>
+                  {type}
                 </label>
               ))}
             </div>

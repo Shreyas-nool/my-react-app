@@ -26,6 +26,12 @@ const formatToISO = (dateObj) => {
 // Round to 2 decimals safely
 const round2 = (num) => Math.round((Number(num) + Number.EPSILON) * 100) / 100;
 
+const formatPrice = (value) => {
+  const v = Number(value || 0);
+  return v !== 0 && v < 0.01 ? v.toFixed(4) : v.toFixed(2);
+};
+
+
 const SalesInvoice = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -33,7 +39,7 @@ const SalesInvoice = () => {
 
   const [stocks, setStocks] = useState([]);
   const [parties, setParties] = useState([]);
-  const [selectedParty, setSelectedParty] = useState("");
+  const [selectedPartyId, setSelectedPartyId] = useState("");
   const [partyOpen, setPartyOpen] = useState(false);
 
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -56,28 +62,36 @@ const SalesInvoice = () => {
     const stocksRef = ref(db, "stocks");
     onValue(stocksRef, (snapshot) => {
       const data = snapshot.val();
-      if (data) {
-        const stockItems = [];
-        Object.entries(data).forEach(([dateKey, dateGroup]) => {
-          Object.entries(dateGroup).forEach(([id, stock]) => {
-            stockItems.push({ ...stock, id, dateKey });
-          });
+      if (!data) return setStocks([]);
+
+      const stockItems = [];
+      Object.entries(data).forEach(([dateKey, dateGroup]) => {
+        Object.entries(dateGroup).forEach(([id, stock]) => {
+          stockItems.push({ ...stock, id, dateKey });
         });
-        setStocks(stockItems);
-      }
+      });
+      setStocks(stockItems);
     });
 
-    const partyRef = ref(db, "parties");
-    onValue(partyRef, (snapshot) => {
+    const partiesRef = ref(db, "parties");
+    onValue(partiesRef, (snapshot) => {
       const data = snapshot.val();
-      if (data) setParties(Object.values(data));
+      if (!data) return setParties([]);
+
+      const list = Object.entries(data).map(([id, details]) => ({
+        id,
+        ...details,
+      }));
+
+      setParties(list);
     });
   }, []);
+
 
   // Pre-fill invoice if editing
   useEffect(() => {
     if (invoiceToEdit) {
-      setSelectedParty(invoiceToEdit.party || "");
+      setSelectedPartyId(invoiceToEdit.partyId || "");
       setItems(invoiceToEdit.items || []);
       setSubtotal(invoiceToEdit.subtotal || invoiceToEdit.total || 0);
       setCreatedAt(invoiceToEdit.createdAt ? new Date(invoiceToEdit.createdAt) : new Date());
@@ -107,17 +121,22 @@ const SalesInvoice = () => {
   };
 
   const handleAddItem = () => {
-    if (!selectedStock || !box || !piecesPerBox || pricePerItem === "") return alert("Please fill all fields.");
+    if (!selectedPartyId) return alert("Please select a party before adding items.");
+
+    if (!selectedStock || !box || !piecesPerBox || pricePerItem === "")
+      return alert("Please fill all fields.");
+
     const totalStockPieces = (Number(selectedStock.boxes) || 0) * (Number(selectedStock.piecesPerBox) || 1);
     const desiredPieces = Number(box) * Number(piecesPerBox);
-    if (desiredPieces > totalStockPieces) return alert(`Cannot add! Only ${totalStockPieces} pieces available in stock.`);
+    if (desiredPieces > totalStockPieces)
+      return alert(`Cannot add! Only ${totalStockPieces} pieces available in stock.`);
 
     const quantity = Number(box) * Number(piecesPerBox);
     const price = parseFloat(pricePerItem);
     const totalItem = round2(quantity * price);
 
     const newItem = {
-      party: selectedParty,
+      partyId: selectedPartyId,
       productName: selectedStock.productName,
       category: selectedStock.category,
       box: Number(box),
@@ -131,6 +150,7 @@ const SalesInvoice = () => {
     setItems([...items, newItem]);
     setSubtotal((prev) => round2(prev + totalItem));
 
+    // reset selection
     setSelectedStock(null);
     setBox("");
     setPiecesPerBox("");
@@ -160,7 +180,7 @@ const SalesInvoice = () => {
   };
 
   const handleCreateSales = async () => {
-    if (!selectedParty) return alert("Please select a party.");
+    if (!selectedPartyId) return alert("Please select a party.");
     if (items.length === 0) return alert("Add items first.");
 
     const isoDateTime = formatToISO(createdAt);
@@ -179,7 +199,7 @@ const SalesInvoice = () => {
 
       const saleData = {
         createdAt: isoDateTime,
-        party: selectedParty,
+        partyId: selectedPartyId,
         items,
         subtotal,
         total: subtotal,
@@ -187,7 +207,6 @@ const SalesInvoice = () => {
       };
 
       await set(saleRef, saleData);
-
       if (!invoiceToEdit) await updateStockAfterSale(items);
 
       alert(invoiceToEdit ? `Invoice updated! Invoice No: ${invoiceNumber}` : `Sale saved! Invoice No: ${invoiceNumber}`);
@@ -199,9 +218,9 @@ const SalesInvoice = () => {
   };
 
   const totalBoxes = items.reduce((s, i) => s + Number(i.box || 0), 0);
-
-  // Filter products live based on selected category
   const filteredStocks = selectedCategory ? stocks.filter((s) => s.category === selectedCategory) : [];
+  const selectedPartyObj = parties.find(p => p.id === selectedPartyId);
+  const selectedPartyName = selectedPartyObj?.name || "";
 
   return (
     <div className="max-w-6xl mx-auto p-6 mt-10 space-y-6">
@@ -220,13 +239,16 @@ const SalesInvoice = () => {
 
       {/* Party & Date */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        {/* Party */}
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium">Party</label>
           <Popover open={partyOpen} onOpenChange={setPartyOpen}>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="w-full justify-between px-3">
-                {selectedParty || "-- Choose Party --"}
+              <Button
+                variant="outline"
+                className="w-full justify-between px-3"
+                disabled={items.length > 0} // LOCK if items already exist
+              >
+                {selectedPartyName || "-- Choose Party --"}
                 <ChevronsUpDown className="h-4 w-4 opacity-50" />
               </Button>
             </PopoverTrigger>
@@ -235,19 +257,36 @@ const SalesInvoice = () => {
                 <CommandInput placeholder="Search party..." onValueChange={setSearchText} />
                 <CommandList>
                   <CommandEmpty>No party found.</CommandEmpty>
-                  {parties.filter(p => (p?.name || "").toLowerCase().includes((searchText || "").toLowerCase())).map((p, i) => (
-                    <CommandItem key={i} value={p.name} onSelect={() => { setSelectedParty(p.name); setPartyOpen(false); }}>
-                      <Check className={cn("mr-2 h-4 w-4", selectedParty === p.name ? "opacity-100" : "opacity-0")} />
-                      {p.name}
-                    </CommandItem>
-                  ))}
+                  {parties
+                    .filter(p => (p.name || "").toLowerCase().includes((searchText || "").toLowerCase()))
+                    .map((p, i) => (
+                      <CommandItem
+                        key={i}
+                        value={p.id}
+                        onSelect={() => {
+                          if (items.length === 0) {
+                            setSelectedPartyId(p.id);
+                            setPartyOpen(false);
+                          } else {
+                            alert("Party cannot be changed after adding items.");
+                          }
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            selectedPartyId === p.id ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        {p.name}
+                      </CommandItem>
+                    ))}
                 </CommandList>
               </Command>
             </PopoverContent>
           </Popover>
         </div>
 
-        {/* Date */}
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium">Invoice Date</label>
           <DatePicker
@@ -363,8 +402,8 @@ const SalesInvoice = () => {
                 <td className="border p-2">{item.productName}</td>
                 <td className="border p-2">{item.box}</td>
                 <td className="border p-2">{item.piecesPerBox}</td>
-                <td className="border p-2">{Number(item.pricePerItem).toFixed(2)}</td>
-                <td className="border p-2">{item.total.toFixed(2)}</td>
+                <td className="border p-2">{formatPrice(item.pricePerItem)}</td>
+                <td className="border p-2">{formatPrice(item.total)}</td>
                 <td className="border p-2">
                   <Button variant="destructive" size="sm" onClick={() => handleDeleteItem(i)}>
                     <Trash2 className="h-4 w-4" />
@@ -379,7 +418,7 @@ const SalesInvoice = () => {
                 <td className="border p-2">{totalBoxes}</td>
                 <td className="border p-2"></td>
                 <td className="border p-2 text-right">Grand Total:</td>
-                <td className="border p-2">{subtotal.toFixed(2)}</td>
+                <td className="border p-2">{formatPrice(subtotal)}</td>
                 <td className="border p-2"></td>
               </tr>
             )}
@@ -388,9 +427,7 @@ const SalesInvoice = () => {
       </div>
 
       <div className="flex justify-end mt-4">
-        <Button className="bg-blue-600" onClick={handleCreateSales}>
-          {invoiceToEdit ? "Update Invoice" : "Create Sales"}
-        </Button>
+        <Button onClick={handleCreateSales}>{invoiceToEdit ? "Update Invoice" : "Create Invoice"}</Button>
       </div>
     </div>
   );

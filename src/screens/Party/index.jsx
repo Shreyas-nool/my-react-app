@@ -27,13 +27,22 @@ const Party = () => {
   const [search, setSearch] = useState("");
   const [sortOrder, setSortOrder] = useState("asc"); // asc | desc
 
-  // 🔹 Load parties
+  // 🔹 Load parties (NEW STRUCTURE)
   useEffect(() => {
     const partiesRef = ref(db, "parties");
 
     const unsubscribe = onValue(partiesRef, (snapshot) => {
       const data = snapshot.val();
-      setParties(data ? Object.values(data) : []);
+
+      if (!data) {
+        setParties([]);
+        return;
+      }
+
+      // ✅ parties -> uuid -> partyObject
+      const partyList = Object.values(data);
+
+      setParties(partyList);
     });
 
     return () => unsubscribe();
@@ -100,7 +109,7 @@ const Party = () => {
       <main className="flex-1 overflow-y-auto">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">
+            <CardTitle className="text-base font-semibold text-center">
               All Parties
             </CardTitle>
           </CardHeader>
@@ -136,23 +145,19 @@ const Party = () => {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    sortedParties.map((party, index) => (
-                      <TableRow key={index} className="hover:bg-gray-50">
-                        <TableCell className="text-center">
-                          {party.name}
+                    sortedParties.map((party) => (
+                      <TableRow
+                        key={party.id}
+                        className="hover:bg-gray-50 cursor-pointer"
+                        onClick={() => navigate(`/party/${party.id}`)}
+                      >
+                        <TableCell>{party.name}</TableCell>
+                        <TableCell>{party.mobile || "-"}</TableCell>
+                        <TableCell>{party.city || "-"}</TableCell>
+                        <TableCell>
+                          {Number(party.openingBalance || 0).toFixed(2)}
                         </TableCell>
-                        <TableCell className="text-center">
-                          {party.mobile || "-"}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {party.city || "-"}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {party.openingBalance || 0}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {party.partyType}
-                        </TableCell>
+                        <TableCell>{party.partyType}</TableCell>
                       </TableRow>
                     ))
                   )}
