@@ -100,40 +100,35 @@ export default function ViewInvoice() {
       {/* Invoice Content */}
       <div ref={printRef} className="bg-white border shadow-md p-6">
         {/* Header */}
-        <header className="mb-6 relative text-center">
-          {/* Party Name + City */}
-          <div className="text-left">
-            <h1 className="text-2xl font-bold">
-              {partyData?.name || "-"}
-            </h1>
-            <p className="text-sm text-gray-600 mt-1">
-              {partyData?.city || "-"}
-            </p>
-            <p className="text-sm text-gray-600 mt-1">
-              <strong>Mobile:</strong> {partyData?.mobile || "-"}
-            </p>
-          </div>
+        <header className="mb-6 text-center relative">
+            {/* Centered Invoice Title */}
+            <h2 className="text-xl font-semibold mb-4">Sales Invoice</h2>
 
-          {/* Centered Invoice Title */}
-          <div className="absolute left-1/2 top-0 transform -translate-x-1/2">
-            <h2 className="text-xl font-semibold">Sales Invoice</h2>
-          </div>
-        </header>
+            {/* Party & Invoice Info */}
+            <div className="flex justify-between text-sm">
+              {/* Party Info (Left) */}
+              <div className="text-left">
+                <h1 className="text-2xl font-bold">{partyData?.name || "-"}</h1>
+                <p className="text-gray-600">{partyData?.city || "-"}</p>
+                <p className="text-gray-600">
+                  <strong>Mobile:</strong> {partyData?.mobile || "-"}
+                </p>
+              </div>
 
-        {/* Invoice Info */}
-        <section className="flex justify-between mb-6 text-sm">
-          <div>
-            <p>
-              <strong>Invoice #:</strong> {sale.invoiceNumber}
-            </p>
-            <p>
-              <strong>Invoice Date:</strong> {formatDate(sale.createdAt)}
-            </p>
-            <p>
-              <strong>Due Date:</strong> {formatDate(sale.dueDate)}
-            </p>
-          </div>
-        </section>
+              {/* Invoice Info (Right) */}
+              <div className="text-right">
+                <p>
+                  <strong>Invoice #:</strong> {sale.invoiceNumber}
+                </p>
+                <p>
+                  <strong>Invoice Date:</strong> {formatDate(sale.createdAt)}
+                </p>
+                <p>
+                  <strong>Due Date:</strong> {formatDate(sale.dueDate)}
+                </p>
+              </div>
+            </div>
+          </header>
 
         {/* Table */}
         <table className="w-full border border-collapse text-sm text-center">

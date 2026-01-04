@@ -293,9 +293,8 @@ const SalesInvoice = () => {
             selected={createdAt}
             onChange={(d) => setCreatedAt(d)}
             showTimeSelect
-            timeFormat="HH:mm"
             timeIntervals={1}
-            dateFormat="dd/MM/yyyy HH:mm"
+            dateFormat="dd/MM/yyyy"
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
           />
         </div>
@@ -356,7 +355,11 @@ const SalesInvoice = () => {
         {/* Box */}
         <div className="flex flex-col gap-1 w-full">
           <label className="text-sm font-medium">Box</label>
-          <Input type="number" value={box} onChange={(e) => handleBoxChange(Number(e.target.value))} />
+          <Input
+            type="number"
+            value={box}
+            onChange={(e) => setBox(e.target.value)} // ← keep as string for blank
+          />
           {stockWarning && <p className="text-red-500 text-xs mt-1">{stockWarning}</p>}
         </div>
 

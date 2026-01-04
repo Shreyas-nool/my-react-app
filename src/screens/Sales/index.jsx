@@ -89,10 +89,14 @@ const SalesScreen = () => {
       sale.invoiceNumber?.toString().includes(q) ||
       partyName.includes(q);
 
-    const matchesDate = selectedDate
-      ? sale.createdAt?.slice(0, 10) ===
-        selectedDate.toISOString().slice(0, 10)
-      : true;
+    const isSameDate = (d1, d2) =>
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate();
+
+  const matchesDate = selectedDate
+    ? isSameDate(new Date(sale.createdAt), selectedDate)
+    : true;
 
     return matchesSearch && matchesDate;
   });
@@ -144,28 +148,30 @@ const SalesScreen = () => {
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
       {/* Header */}
-      <div className="relative border-b pb-2">
+      <div className="relative border-b pb-2 flex items-center justify-center">
+        {/* Back Button */}
         <Button
           variant="ghost"
           size="sm"
           onClick={() => navigate("/")}
-          className="absolute left-0 top-0 h-9 w-9 p-0"
+          className="absolute left-0 top-1/2 transform -translate-y-1/2 h-9 w-9 p-0"
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
 
+        {/* Title */}
+        <h1 className="text-xl font-semibold text-center">Sales Invoices</h1>
+
+        {/* Create Sales Button */}
         <Button
           onClick={() => navigate("/sales/create-sales")}
-          className="absolute right-0 top-0 h-9 text-sm"
+          className="absolute right-0 top-1/2 transform -translate-y-1/2 h-9 text-sm flex items-center"
         >
           <Plus className="h-4 w-4 mr-2" />
           Create Sales
         </Button>
-
-        <h1 className="text-xl font-semibold text-center">
-          Sales Invoices
-        </h1>
       </div>
+
 
       {/* Filters */}
       <div className="flex justify-center gap-4">
