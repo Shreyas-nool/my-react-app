@@ -73,7 +73,7 @@ const LoginScreen = () => {
             <div className="relative w-80 max-w-md mx-auto bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl shadow-2xl p-6 sm:p-8 text-white">
                 <div className="text-center mb-6 sm:mb-8">
                     <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white drop-shadow-lg">
-                        Welcome Back
+                        Login
                     </h1>
                 </div>
 
@@ -81,7 +81,7 @@ const LoginScreen = () => {
                     {/* Email Field */}
                     <div>
                         <label htmlFor="email" className="block text-sm font-medium text-gray-200 mb-1">
-                            User ID
+                            Username
                         </label>
                         <div className="relative">
                             <Mail className="absolute left-3 top-2.5 text-gray-400 h-5 w-5" />
