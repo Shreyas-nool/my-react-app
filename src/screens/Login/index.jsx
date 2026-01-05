@@ -70,7 +70,7 @@ const LoginScreen = () => {
             <div className="absolute inset-0 bg-black/30"></div>
 
             {/* Login Card */}
-            <div className="relative w-80 max-w-md mx-auto bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl shadow-2xl p-6 sm:p-8 text-white">
+            <div className="relative w-70 max-w-md mx-auto bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl shadow-2xl p-6 sm:p-8 text-white">
                 <div className="text-center mb-6 sm:mb-8">
                     <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white drop-shadow-lg">
                         Login
@@ -128,7 +128,7 @@ const LoginScreen = () => {
                     </button>
                 </form>
 
-                {/* Footer */}
+                {/* Footer
                 <div className="text-center mt-6 text-xs sm:text-sm text-gray-400">
                     <p
                         className="cursor-pointer"
@@ -141,6 +141,7 @@ const LoginScreen = () => {
                         <br />
                     </p>
                 </div>
+                 */}
             </div>
         </section>
     );
