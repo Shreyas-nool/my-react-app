@@ -292,7 +292,6 @@ const SalesInvoice = () => {
           <DatePicker
             selected={createdAt}
             onChange={(d) => setCreatedAt(d)}
-            showTimeSelect
             timeIntervals={1}
             dateFormat="dd/MM/yyyy"
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
-import { ref, onValue, off, remove, set } from "firebase/database";
+import { ref, onValue, off, remove, set, push } from "firebase/database";
 
 import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
 import { ArrowLeft, Trash2, Plus } from "lucide-react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -24,14 +25,16 @@ const JRPurchases = () => {
   const [balance, setBalance] = useState(0);
   const [fromDate, setFromDate] = useState(null);
   const [toDate, setToDate] = useState(null);
+  const [testAdd, setTestAdd] = useState(""); // <-- input for adding money
 
   const BANK_NAME = "JR";
 
   const formatAmount = (num) => Number(num).toFixed(2);
 
+  // ------------------- FETCH DATA -------------------
   useEffect(() => {
     const paymentsRef = ref(db, `payments/account/${BANK_NAME}`);
-    const expenseRef = ref(db, "expenses"); // GLOBAL EXPENSES NODE
+    const expenseRef = ref(db, "expenses");
     const transferRef = ref(db, "transfers");
     const jrBalanceRef = ref(db, `accounts/${BANK_NAME}/balance`);
 
@@ -42,9 +45,9 @@ const JRPurchases = () => {
     const updateEntries = () => {
       let temp = [];
       let bal = 0;
-      const seenKeys = new Set(); // Deduplicate
+      const seenKeys = new Set();
 
-      // ----------------- PAYMENTS -----------------
+      // Payments
       Object.entries(allPayments || {}).forEach(([date, items]) => {
         Object.entries(items || {}).forEach(([txnId, p]) => {
           if (!p || !p.txnId || seenKeys.has(p.txnId)) return;
@@ -64,17 +67,15 @@ const JRPurchases = () => {
         });
       });
 
-      // ----------------- EXPENSES -----------------
+      // Expenses
       Object.entries(allExpenses || {}).forEach(([category, entities]) => {
         Object.entries(entities || {}).forEach(([entityName, items]) => {
-          if (entityName !== BANK_NAME) return; // Only JR
+          if (entityName !== BANK_NAME) return;
           Object.entries(items || {}).forEach(([id, exp]) => {
             if (!exp || seenKeys.has(id)) return;
             seenKeys.add(id);
-
             const amt = Number(exp.amount || 0);
-            bal -= amt; // Expenses decrease balance
-
+            bal -= amt;
             temp.push({
               key: id,
               path: `expenses/${category}/${entityName}/${id}`,
@@ -88,7 +89,7 @@ const JRPurchases = () => {
         });
       });
 
-      // ----------------- TRANSFERS -----------------
+      // Transfers
       Object.entries(allTransfers || {}).forEach(([type, names]) => {
         Object.entries(names || {}).forEach(([name, dates]) => {
           Object.entries(dates || {}).forEach(([date, items]) => {
@@ -125,13 +126,10 @@ const JRPurchases = () => {
         });
       });
 
-      // Sort by date descending
       temp.sort((a, b) => new Date(b.date) - new Date(a.date));
 
       setEntries(temp);
       setBalance(Math.round((bal + Number.EPSILON) * 100) / 100);
-
-      // Update JR balance in DB
       set(jrBalanceRef, Math.round((bal + Number.EPSILON) * 100) / 100);
     };
 
@@ -139,12 +137,10 @@ const JRPurchases = () => {
       allPayments = snap.val() || {};
       updateEntries();
     });
-
     const unsubExpenses = onValue(expenseRef, (snap) => {
       allExpenses = snap.val() || {};
       updateEntries();
     });
-
     const unsubTransfers = onValue(transferRef, (snap) => {
       allTransfers = snap.val() || {};
       updateEntries();
@@ -157,11 +153,43 @@ const JRPurchases = () => {
     };
   }, []);
 
+  // ------------------- DELETE ENTRY -------------------
   const handleDelete = async (path) => {
     if (!window.confirm("Delete this entry?")) return;
     await remove(ref(db, path));
   };
 
+  // ------------------- ADD TO BALANCE (TEST, CREATE ENTRY) -------------------
+  const handleAddBalance = async () => {
+    const amt = Number(testAdd);
+    if (!amt || amt <= 0) return;
+
+    const date = new Date().toISOString().split("T")[0];
+    const time = Date.now();
+
+    // Create a payment entry to mimic a real deposit
+    const entryRef = push(ref(db, `payments/account/${BANK_NAME}/${date}`));
+    await set(entryRef, {
+      amount: amt,
+      date,
+      fromName: "TEST ADD",
+      fromType: "test",
+      toName: BANK_NAME,
+      toType: "account",
+      note: "Test add to balance",
+      createdAt: time,
+      txnId: entryRef.key,
+    });
+
+    // Update balance separately
+    const balRef = ref(db, `accounts/${BANK_NAME}/balance`);
+    set(balRef, balance + amt);
+
+    // Reset input
+    setTestAdd("");
+  };
+
+  // ------------------- FILTER ENTRIES -------------------
   const filtered = entries.filter((e) => {
     const d = new Date(e.date);
     if (fromDate && d < fromDate) return false;
@@ -188,11 +216,27 @@ const JRPurchases = () => {
         </Button>
       </div>
 
-      {/* BALANCE */}
-      <div className="bg-white p-5 rounded-xl shadow border flex justify-between items-center">
+      {/* BALANCE + ADD MONEY */}
+      <div className="bg-white p-5 rounded-xl shadow border flex flex-col md:flex-row justify-between items-center gap-4">
         <h2 className="text-xl font-bold">Balance: ₹{formatAmount(balance)}</h2>
 
-        <div className="flex gap-2">
+        {/* TEST ADD INPUT */}
+        <div className="flex gap-2 items-center">
+          <Input
+            type="number"
+            placeholder="Add money (test)"
+            value={testAdd}
+            onChange={(e) => setTestAdd(e.target.value)}
+          />
+          <Button
+            onClick={handleAddBalance}
+            className="bg-green-600 text-white hover:bg-green-500"
+          >
+            Add
+          </Button>
+        </div>
+
+        <div className="flex gap-2 mt-2 md:mt-0">
           <DatePicker
             selected={fromDate}
             onChange={setFromDate}

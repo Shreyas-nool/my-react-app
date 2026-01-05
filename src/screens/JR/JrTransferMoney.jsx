@@ -26,6 +26,7 @@ export default function JrTransferMoney() {
 
   const [toType, setToType] = useState("");
   const [toName, setToName] = useState("");
+  const [toId, setToId] = useState(""); // <-- ID for bank/party
 
   const [banks, setBanks] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -33,43 +34,38 @@ export default function JrTransferMoney() {
 
   const [balance, setBalance] = useState(0);
 
-  // ---------------- FETCH & FLATTEN DATA ----------------
+  // ---------------- FETCH DATA ----------------
   useEffect(() => {
     // BANKS
     onValue(ref(db, "banks"), (snap) => {
-      if (!snap.exists()) return setBanks([]);
-
       const list = [];
-      Object.entries(snap.val()).forEach(([bankName, ids]) => {
-        Object.entries(ids).forEach(([id, data]) => {
-          list.push({ ...data, id, name: bankName });
-        });
+      snap.forEach((child) => {
+        const id = child.key;
+        const data = child.val();
+        list.push({ ...data, id, displayName: data.bankName });
       });
       setBanks(list);
     });
 
     // ACCOUNTS
     onValue(ref(db, "accounts"), (snap) => {
-      if (!snap.exists()) return setAccounts([]);
-
       const list = [];
-      Object.entries(snap.val()).forEach(([accName, ids]) => {
-        Object.entries(ids).forEach(([id, data]) => {
-          list.push({ ...data, id, name: accName });
-        });
+      snap.forEach((child) => {
+        const accName = child.key;
+        const data = child.val();
+        list.push({ ...data, id: accName, displayName: accName });
       });
       setAccounts(list);
     });
 
     // PARTIES
     onValue(ref(db, "parties"), (snap) => {
-      if (!snap.exists()) return setParties([]);
-
       const list = [];
-      Object.entries(snap.val()).forEach(([partyName, ids]) => {
-        Object.entries(ids).forEach(([id, data]) => {
-          list.push({ ...data, id, name: partyName });
-        });
+      snap.forEach((child) => {
+        const id = child.key;
+        const data = child.val();
+        // display name = "Name (City)"
+        list.push({ ...data, id, displayName: `${data.name} (${data.city})` });
       });
       setParties(list);
     });
@@ -84,7 +80,7 @@ export default function JrTransferMoney() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!toType || !toName || !amount) {
+    if (!toType || !toId || !amount) {
       toast.error("Fill all fields");
       return;
     }
@@ -105,12 +101,13 @@ export default function JrTransferMoney() {
 
       await set(jrBalRef, jrBal - amt);
 
-      // Destination balance
-      const map = { bank: "banks", account: "accounts", party: "parties" };
-      const destBalRef = ref(db, `${map[toType]}/${toName}/balance`);
+      // Destination balance path
+      let destBalRef;
+      if (toType === "account") destBalRef = ref(db, `accounts/${toId}/balance`);
+      else destBalRef = ref(db, `${toType}s/${toId}/balance`);
+
       const destSnap = await get(destBalRef);
       const destBal = destSnap.exists() ? Number(destSnap.val()) : 0;
-
       await set(destBalRef, destBal + amt);
 
       // Payments
@@ -119,19 +116,19 @@ export default function JrTransferMoney() {
         date,
         fromName: "JR",
         fromType: "account",
-        toName,
+        toName: toType === "account" ? toId : toName,
         toType,
         note: notes,
         createdAt: time,
         txnId: time,
       });
 
-      await push(ref(db, `payments/${toName}/${date}`), {
+      await push(ref(db, `payments/${toType === "account" ? toId : toName}/${date}`), {
         amount: amt,
         date,
         fromName: "JR",
         fromType: "account",
-        toName,
+        toName: toType === "account" ? toId : toName,
         toType,
         note: notes,
         createdAt: time,
@@ -139,10 +136,10 @@ export default function JrTransferMoney() {
       });
 
       // Transfer history
-      await push(ref(db, `transfers/${toType}/${toName}/${date}`), {
+      await push(ref(db, `transfers/${toType}/${toType === "account" ? toId : toName}/${date}`), {
         from: "JR",
         toType,
-        toName,
+        toName: toType === "account" ? toId : toName,
         amount: amt,
         note: notes,
         createdAt: time,
@@ -191,10 +188,14 @@ export default function JrTransferMoney() {
 
           <div className="flex-1">
             <label className="text-sm font-medium">Transfer To Type</label>
-            <Select value={toType} onValueChange={(v) => {
-              setToType(v);
-              setToName("");
-            }}>
+            <Select
+              value={toType}
+              onValueChange={(v) => {
+                setToType(v);
+                setToName("");
+                setToId("");
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
@@ -209,14 +210,21 @@ export default function JrTransferMoney() {
           {toType && (
             <div className="flex-1">
               <label className="text-sm font-medium">Select {toType}</label>
-              <Select value={toName} onValueChange={setToName}>
+              <Select
+                value={toId}
+                onValueChange={(id) => {
+                  setToId(id);
+                  const selected = getOptions().find((x) => x.id === id);
+                  setToName(selected?.displayName || "");
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select" />
                 </SelectTrigger>
                 <SelectContent>
                   {getOptions().map((item) => (
-                    <SelectItem key={item.id} value={item.name}>
-                      {item.name}
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.displayName}
                     </SelectItem>
                   ))}
                 </SelectContent>

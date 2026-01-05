@@ -125,7 +125,7 @@ const StockScreen = () => {
           </CardTitle>
         </CardHeader>
 
-        <CardContent className="overflow-auto">
+        <CardContent className="overflow-auto max-h-[70vh] hide-scrollbar">
           {filteredStock.length === 0 ? (
             <div className="text-center py-10 text-gray-500">
               No stock found.
@@ -133,14 +133,14 @@ const StockScreen = () => {
           ) : (
             <Table className="border">
               <TableHeader>
-                <TableRow className="bg-gray-100">
+                <TableRow className="bg-gray-100 sticky top-0 z-10 shadow-sm">
                   <TableHead className="text-center font-semibold">Sr</TableHead>
                   <TableHead className="text-center font-semibold">Category</TableHead>
                   <TableHead className="text-center font-semibold">Product</TableHead>
                   <TableHead className="text-center font-semibold">Boxes</TableHead>
                   <TableHead className="text-center font-semibold">Pcs/Box</TableHead>
                   <TableHead className="text-center font-semibold">Total Pcs</TableHead>
-                  <TableHead className="text-center font-semibold">Price/Pc</TableHead>
+                  <TableHead className="text-center font-semibold">Price/Pc</TableHead> 
                   <TableHead className="text-center font-semibold">Total Value</TableHead>
                   <TableHead className="text-center font-semibold">Date</TableHead>
                   <TableHead className="text-center font-semibold">Action</TableHead>

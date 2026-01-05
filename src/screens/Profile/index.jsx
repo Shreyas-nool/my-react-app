@@ -6,6 +6,9 @@ import { Button } from "../../components/ui/button";
 import { useProfileMutation } from "../../slices/userApiSlice";
 import { setCredentials } from "../../slices/authSlice";
 
+import { db } from "../../firebase";
+import { ref, get, set } from "firebase/database";
+
 const ProfileScreen = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -16,6 +19,14 @@ const ProfileScreen = () => {
   const { userInfo } = useSelector((state) => state.auth);
 
   const [updateProfile, { isLoading }] = useProfileMutation();
+
+  const DEFAULT_ACCOUNTS = [
+    "JR",
+    "Talha",
+    "SR",
+    "Mumbai Payment",
+    "Malad Payment",
+  ];
 
   useEffect(() => {
     if (userInfo) {
@@ -46,6 +57,36 @@ const ProfileScreen = () => {
     }
   };
 
+  // --------------------------------------------
+  // CREATE DEFAULT ACCOUNT IN FIREBASE
+  // --------------------------------------------
+  const createAccount = async (accountName) => {
+    try {
+      const accountRef = ref(db, `accounts/${accountName}`);
+      const snapshot = await get(accountRef);
+
+      if (snapshot.exists()) {
+        toast.info(`${accountName} already exists`);
+        return;
+      }
+
+      await set(accountRef, {
+        name: accountName,
+        type: "account",
+        balance: 500,
+        createdAt: new Date().toISOString(),
+        entries: {
+          expenses: {},
+        },
+      });
+
+      toast.success(`${accountName} account created`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to create account");
+    }
+  };
+
   return (
     <div className="bg-white min-h-screen">
       <div className="mx-auto max-w-3xl px-4 pb-24 pt-10 sm:px-6 lg:px-8">
@@ -53,6 +94,7 @@ const ProfileScreen = () => {
           Your Profile
         </h1>
 
+        {/* PROFILE FORM */}
         <form onSubmit={submitHandler}>
           <div className="mt-12 grid grid-cols-1 gap-x-8 gap-y-10 border-b border-slate-900/10 pb-12 md:grid-cols-3">
             <div>
@@ -121,6 +163,29 @@ const ProfileScreen = () => {
             </Button>
           </div>
         </form>
+
+        {/* CREATE DEFAULT ACCOUNTS */}
+        <div className="mt-16 border-t border-slate-900/10 pt-10">
+          <h2 className="text-lg font-semibold text-slate-900">
+            Create Default Accounts
+          </h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Click to create predefined system accounts in the database.
+          </p>
+
+          <div className="mt-6 flex flex-wrap gap-3">
+            {DEFAULT_ACCOUNTS.map((account) => (
+              <Button
+                key={account}
+                type="button"
+                variant="outline"
+                onClick={() => createAccount(account)}
+              >
+                Create {account}
+              </Button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

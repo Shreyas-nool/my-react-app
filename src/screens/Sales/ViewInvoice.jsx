@@ -15,7 +15,7 @@ const formatDate = (dateString) => {
   return `${dd}-${mm}-${yyyy}`;
 };
 
-/* Price formatting for display */
+/* Price formatting */
 const formatPrice = (value) => {
   const v = Number(value || 0);
   return v !== 0 && v < 0.01 ? v.toFixed(4) : v.toFixed(2);
@@ -28,18 +28,16 @@ export default function ViewInvoice() {
 
   const [partyData, setPartyData] = useState(null);
 
-  // Fetch party details based on sale.partyId
+  /* Fetch party */
   useEffect(() => {
     if (!sale?.partyId) return;
 
     const partyRef = ref(db, `parties/${sale.partyId}`);
-    const unsubscribe = onValue(partyRef, (snapshot) => {
-      const data = snapshot.val();
-      if (!data) return;
-      setPartyData(data);
+    const unsub = onValue(partyRef, (snap) => {
+      if (snap.exists()) setPartyData(snap.val());
     });
 
-    return () => unsubscribe();
+    return () => unsub();
   }, [sale?.partyId]);
 
   if (!sale) {
@@ -66,28 +64,19 @@ export default function ViewInvoice() {
 
   /* Print */
   const handlePrint = () => {
-    const printContent = printRef.current.innerHTML;
-    const originalContent = document.body.innerHTML;
-    document.body.innerHTML = printContent;
     window.print();
-    document.body.innerHTML = originalContent;
-    window.location.reload();
   };
 
   return (
     <div className="max-w-5xl mx-auto p-4 sm:p-6 mt-6">
-      {/* Top Buttons */}
-      <div className="flex justify-between mb-6">
+      {/* Top Buttons (NOT printed) */}
+      <div className="flex justify-between mb-6 print-hide">
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>
 
         <div className="flex gap-2">
-          <Button
-            onClick={() =>
-              navigate("/sales/create-sales", { state: sale })
-            }
-          >
+          <Button onClick={() => navigate("/sales/create-sales", { state: sale })}>
             <Edit className="h-4 w-4 mr-1" /> Edit
           </Button>
 
@@ -97,38 +86,43 @@ export default function ViewInvoice() {
         </div>
       </div>
 
-      {/* Invoice Content */}
-      <div ref={printRef} className="bg-white border shadow-md p-6">
+      {/* PRINT AREA */}
+      <div
+        ref={printRef}
+        className="print-area bg-white border shadow-md p-6"
+      >
         {/* Header */}
-        <header className="mb-6 text-center relative">
-            {/* Centered Invoice Title */}
-            <h2 className="text-xl font-semibold mb-4">Sales Invoice</h2>
+        <header className="mb-6">
+          <h2 className="text-xl font-semibold text-center mb-4">
+            Sales Invoice
+          </h2>
 
-            {/* Party & Invoice Info */}
-            <div className="flex justify-between text-sm">
-              {/* Party Info (Left) */}
-              <div className="text-left">
-                <h1 className="text-2xl font-bold">{partyData?.name || "-"}</h1>
-                <p className="text-gray-600">{partyData?.city || "-"}</p>
-                <p className="text-gray-600">
-                  <strong>Mobile:</strong> {partyData?.mobile || "-"}
-                </p>
-              </div>
-
-              {/* Invoice Info (Right) */}
-              <div className="text-right">
-                <p>
-                  <strong>Invoice #:</strong> {sale.invoiceNumber}
-                </p>
-                <p>
-                  <strong>Invoice Date:</strong> {formatDate(sale.createdAt)}
-                </p>
-                <p>
-                  <strong>Due Date:</strong> {formatDate(sale.dueDate)}
-                </p>
-              </div>
+          <div className="flex justify-between text-sm">
+            {/* Party Info */}
+            <div>
+              <h1 className="text-2xl font-bold">
+                {partyData?.name || "-"}
+              </h1>
+              <p className="text-gray-600">{partyData?.city || "-"}</p>
+              <p className="text-gray-600">
+                <strong>Mobile:</strong> {partyData?.mobile || "-"}
+              </p>
             </div>
-          </header>
+
+            {/* Invoice Info */}
+            <div className="text-right">
+              <p>
+                <strong>Invoice #:</strong> {sale.invoiceNumber}
+              </p>
+              <p>
+                <strong>Date:</strong> {formatDate(sale.createdAt)}
+              </p>
+              <p>
+                <strong>Due Date:</strong> {formatDate(sale.dueDate)}
+              </p>
+            </div>
+          </div>
+        </header>
 
         {/* Table */}
         <table className="w-full border border-collapse text-sm text-center">
@@ -152,8 +146,12 @@ export default function ViewInvoice() {
                 <td className="border p-2">{item.productName}</td>
                 <td className="border p-2">{item.box}</td>
                 <td className="border p-2">{item.piecesPerBox}</td>
-                <td className="border p-2">{formatPrice(item.pricePerItem)}</td>
-                <td className="border p-2">{formatPrice(item.total)}</td>
+                <td className="border p-2">
+                  {formatPrice(item.pricePerItem)}
+                </td>
+                <td className="border p-2">
+                  {formatPrice(item.total)}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -165,12 +163,56 @@ export default function ViewInvoice() {
               </td>
               <td className="border p-2">{totalBoxes}</td>
               <td className="border p-2"></td>
-              <td className="border p-2 text-right">Invoice Total</td>
-              <td className="border p-2">{formatPrice(invoiceTotal)}</td>
+              <td className="border p-2 text-right">
+                Invoice Total
+              </td>
+              <td className="border p-2">
+                {formatPrice(invoiceTotal)}
+              </td>
             </tr>
           </tfoot>
         </table>
       </div>
+
+      {/* PRINT STYLES */}
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+
+          .print-area,
+          .print-area * {
+            visibility: visible !important;
+          }
+
+          .print-area {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            padding: 24px;
+            box-shadow: none !important;
+            border: none !important;
+          }
+
+          .print-hide {
+            display: none !important;
+          }
+
+          @page {
+            size: A4;
+            margin: 12mm;
+          }
+
+          table {
+            page-break-inside: auto;
+          }
+
+          tr {
+            page-break-inside: avoid;
+          }
+        }
+      `}</style>
     </div>
   );
 }

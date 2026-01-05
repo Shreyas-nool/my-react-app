@@ -51,13 +51,13 @@ export default function AddPayment() {
       if (!snap.exists()) return;
 
       const list = [];
-      Object.entries(snap.val()).forEach(([partyName, ids]) => {
-        Object.entries(ids).forEach(([id, data]) => {
-          list.push({
-            id,
-            parentKey: partyName,
-            name: data.name,
-          });
+      Object.entries(snap.val()).forEach(([id, data]) => {
+        if (!data?.name) return;
+        list.push({
+          id,
+          parentKey: id,
+          name: data.name,
+          city: data.city || "",
         });
       });
       setParties(list);
@@ -68,13 +68,12 @@ export default function AddPayment() {
       if (!snap.exists()) return;
 
       const list = [];
-      Object.entries(snap.val()).forEach(([bankName, ids]) => {
-        Object.entries(ids).forEach(([id]) => {
-          list.push({
-            id,
-            parentKey: bankName,
-            name: bankName,
-          });
+      Object.entries(snap.val()).forEach(([id, data]) => {
+        if (!data?.bankName) return;
+        list.push({
+          id,
+          parentKey: id,
+          name: data.bankName,
         });
       });
       setBanks(list);
@@ -85,13 +84,13 @@ export default function AddPayment() {
       if (!snap.exists()) return;
 
       const list = [];
-      Object.entries(snap.val()).forEach(([accName, ids]) => {
-        Object.entries(ids).forEach(([id]) => {
-          list.push({
-            id,
-            parentKey: accName,
-            name: accName,
-          });
+      Object.entries(snap.val()).forEach(([id, data]) => {
+        if (!data?.name) return;
+        list.push({
+          id,
+          parentKey: id,
+          name: data.name,
+          balance: data.balance || 0,
         });
       });
       setAccounts(list);
@@ -137,11 +136,11 @@ export default function AddPayment() {
             <CommandEmpty>No results</CommandEmpty>
             {getListByType(type)
               .filter((e) =>
-                e.name.toLowerCase().includes(search.toLowerCase())
+                (e.name || "").toLowerCase().includes(search.toLowerCase())
               )
               .map((e) => (
                 <CommandItem
-                  key={e.id}
+                  key={`${type}-${e.id}`} // unique key
                   onSelect={() => {
                     setValue(e);
                     setOpen(false);
@@ -154,7 +153,9 @@ export default function AddPayment() {
                       value?.id === e.id ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  {e.name}
+                  {type === "party" && `${e.name}${e.city ? ` (${e.city})` : ""}`}
+                  {type === "bank" && `${e.name}`}
+                  {type === "account" && `${e.name}`}
                 </CommandItem>
               ))}
           </CommandList>
@@ -173,8 +174,9 @@ export default function AddPayment() {
     }
 
     const amt = Number(amount);
-    const dateKey = date.toISOString().split("T")[0];
+    const dateKey = date.toISOString().split("T")[0]; // YYYY-MM-DD
     const txnId = Date.now().toString();
+    const createdAt = Date.now();
 
     const nodeMap = {
       party: "parties",
@@ -189,16 +191,14 @@ export default function AddPayment() {
       toType,
       toName: toEntity.name,
       amount: amt,
-      date: dateKey,
       note: note || "-",
-      createdAt: Date.now(),
+      date: dateKey,
+      createdAt,
     };
 
     const updateBalance = async (type, entity, delta) => {
-      const balRef = ref(
-        db,
-        `${nodeMap[type]}/${entity.parentKey}/${entity.id}/balance`
-      );
+      if (type === "bank") return; // skip banks
+      const balRef = ref(db, `${nodeMap[type]}/${entity.parentKey}/balance`);
       const snap = await get(balRef);
       const current = snap.exists() ? Number(snap.val()) : 0;
       await set(balRef, current + delta);
@@ -206,11 +206,42 @@ export default function AddPayment() {
 
     const saveEntry = async (type, entity) => {
       await set(
-        ref(
-          db,
-          `${nodeMap[type]}/${entity.parentKey}/${entity.id}/entries/${dateKey}/${txnId}`
-        ),
+        ref(db, `${nodeMap[type]}/${entity.parentKey}/entries/${dateKey}/${txnId}`),
         payload
+      );
+    };
+
+    const savePaymentNode = async () => {
+      // From side
+      await set(
+        ref(db, `payments/${fromType}/${fromEntity.name}/${dateKey}/${txnId}`),
+        {
+          txnId,
+          fromType,
+          fromName: fromEntity.name,
+          toType,
+          toName: toEntity.name,
+          amount: amt,
+          note: note || "-",
+          date: dateKey,
+          createdAt,
+        }
+      );
+
+      // To side
+      await set(
+        ref(db, `payments/${toType}/${toEntity.name}/${dateKey}/${txnId}`),
+        {
+          txnId,
+          fromType,
+          fromName: fromEntity.name,
+          toType,
+          toName: toEntity.name,
+          amount: amt,
+          note: note || "-",
+          date: dateKey,
+          createdAt,
+        }
       );
     };
 
@@ -220,6 +251,8 @@ export default function AddPayment() {
 
       await saveEntry(fromType, fromEntity);
       await saveEntry(toType, toEntity);
+
+      await savePaymentNode();
 
       alert("Transaction Added Successfully");
       navigate("/payment");
@@ -237,7 +270,7 @@ export default function AddPayment() {
           <Button variant="ghost" onClick={() => navigate("/payment")}>
             <ArrowLeft />
           </Button>
-          <h1 className="text-xl font-semibold">Add Transaction</h1>
+          <h1 className="mx-auto text-xl font-semibold">Record Payment</h1>
         </div>
 
         <Card>
@@ -245,11 +278,12 @@ export default function AddPayment() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label>Date</label>
+                  <label>Date<br /></label>
                   <DatePicker
                     selected={date}
                     onChange={setDate}
                     className="w-full border rounded p-2"
+                    dateFormat="dd-MM-yyyy"
                   />
                 </div>
                 <div>
