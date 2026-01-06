@@ -21,34 +21,57 @@ const AddParty = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!name.trim()) {
-      alert("Party name is required");
-      return;
-    }
+    // ✅ All fields required validation
+    if (!name.trim()) return alert("Party name is required");
+    if (!city.trim()) return alert("Place is required");
+    if (!mobile.trim()) return alert("Mobile is required");
+    if (openingBalance === "" || isNaN(Number(openingBalance))) return alert("Old Balance is required");
+    if (creditPeriod === "" || isNaN(Number(creditPeriod))) return alert("Credit Period is required");
+    if (!partyType) return alert("Party Type is required");
 
     const partyId = uuidv4();
+    const openingAmt = Number(openingBalance) || 0;
 
-    // Convert opening balance to number, default 0
-    const initialBalance = Number(openingBalance) || 0;
+    // Local date key (NO ISO BUG)
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const dateKey = `${yyyy}-${mm}-${dd}`;
 
     const partyData = {
       id: partyId,
       name: name.trim(),
       city: city.trim(),
       mobile: mobile.trim(),
-      openingBalance: openingBalance,
       partyType,
       creditPeriod: Number(creditPeriod) || 0,
-
-      // LIVE balance starts with the opening balance
-      balance: -initialBalance, // negative because party owes us
-
-      createdAt: new Date().toISOString(),
-      entries: {}, // future transactions
+      openingBalance: openingAmt,
+      balance: openingAmt, // live balance
+      createdAt: Date.now(),
     };
 
     try {
+      // 1️⃣ Save party
       await set(ref(db, `parties/${partyId}`), partyData);
+
+      // 2️⃣ Save opening balance as FIRST ENTRY
+      if (openingAmt !== 0) {
+        const txnId = Date.now().toString();
+
+        await set(
+          ref(db, `parties/${partyId}/entries/${dateKey}/${txnId}`),
+          {
+            txnId,
+            type: "opening_balance",
+            amount: openingAmt,
+            note: "Opening Balance",
+            date: dateKey,
+            createdAt: Date.now(),
+          }
+        );
+      }
+
       alert("✅ Party added successfully");
       navigate("/party");
     } catch (err) {
@@ -96,6 +119,7 @@ const AddParty = () => {
               className="w-full border rounded p-2"
               value={city}
               onChange={(e) => setCity(e.target.value)}
+              required
             />
           </div>
 
@@ -106,20 +130,20 @@ const AddParty = () => {
               className="w-full border rounded p-2"
               value={mobile}
               onChange={(e) => setMobile(e.target.value)}
+              required
             />
           </div>
 
           {/* Opening Balance */}
           <div>
-            <label className="text-sm font-medium">
-              Old Balance
-            </label>
+            <label className="text-sm font-medium">Old Balance</label>
             <input
               type="number"
               step="0.01"
               className="w-full border rounded p-2"
               value={openingBalance}
               onChange={(e) => setOpeningBalance(e.target.value)}
+              required
             />
           </div>
 
@@ -132,6 +156,7 @@ const AddParty = () => {
               className="w-full border rounded p-2"
               value={creditPeriod}
               onChange={(e) => setCreditPeriod(e.target.value)}
+              required
             />
           </div>
 
@@ -145,6 +170,7 @@ const AddParty = () => {
                     type="radio"
                     checked={partyType === type}
                     onChange={() => setPartyType(type)}
+                    required
                   />
                   {type}
                 </label>

@@ -1,312 +1,323 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Download } from "lucide-react";
-import { Button } from "../../components/ui/button";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from "../../components/ui/card";
+import React, { useEffect, useState, useRef, useMemo } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
-import { ref, onValue, set } from "firebase/database";
+import { ref, onValue, off, set } from "firebase/database";
+import { Button } from "../../components/ui/button";
+import { ArrowLeft } from "lucide-react";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import { useReactToPrint } from "react-to-print";
 
-/* ================= HELPERS ================= */
-const formatDate = (d) => {
-  if (!d) return "-";
-  const date = new Date(d);
-  if (isNaN(date)) return "-";
-  return `${date.getDate().toString().padStart(2, "0")}/${
-    (date.getMonth() + 1).toString().padStart(2, "0")
-  }/${date.getFullYear()}`;
-};
-
-const formatNumber = (n) => Number(n || 0).toFixed(2);
-
-/* ================= COMPONENT ================= */
-export default function BankDetails() {
-  const navigate = useNavigate();
+const BankLedgerScreen = () => {
   const { bankId } = useParams();
+  const navigate = useNavigate();
+  const printRef = useRef();
 
-  const [bankName, setBankName] = useState("");
-
-  const [expenseEntries, setExpenseEntries] = useState([]);
-  const [paymentEntries, setPaymentEntries] = useState([]);
-  const [transferEntries, setTransferEntries] = useState([]);
-
+  const [ledgerData, setLedgerData] = useState({
+    bankName: "",
+    transactions: [],
+    balance: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
   const [fromDate, setFromDate] = useState(null);
   const [toDate, setToDate] = useState(null);
 
-  const [balance, setBalance] = useState(0);
+  const itemsPerPage = 20;
+  const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
-  /* ================= LOAD BANK NAME ================= */
   useEffect(() => {
+    setLoading(true);
     const bankRef = ref(db, `banks/${bankId}`);
-    return onValue(bankRef, (snap) => {
-      if (snap.exists()) {
-        setBankName(snap.val().bankName || "Bank");
-        if (snap.val().balance !== undefined) setBalance(snap.val().balance);
-      }
-    });
-  }, [bankId]);
+    const paymentsRef = ref(db, "payments");
 
-  /* ================= EXPENSES ================= */
-  useEffect(() => {
-    if (!bankName) return;
+    const handleUpdate = async () => {
+      try {
+        const bankSnap = await new Promise((resolve) =>
+          onValue(bankRef, resolve, { onlyOnce: true })
+        );
+        const bank = bankSnap.val();
+        if (!bank) return;
 
-    const expenseRef = ref(db, `expenses/bank/${bankName}`);
-    return onValue(expenseRef, (snap) => {
-      const list = [];
-      if (snap.exists()) {
-        Object.values(snap.val()).forEach((e) => {
-          if (!e.amount || !e.date) return;
+        const bankName = bank.bankName || "Bank";
+        const openingBalance = round2(Number(bank.openingBalance || 0));
+        const createdAt = bank.createdAt;
 
-          list.push({
-            id: `exp-${e.createdAt}`,
-            date: e.date,
-            type: "DEBIT",
-            from: bankName,
-            to: e.expenseFor || "-",
-            amount: Number(e.amount),
-            note: e.entity || "-",
-            createdAt: new Date(e.createdAt).getTime(),
-            entryType: "EXPENSE",
-          });
+        const transactions = [];
+        const usedKeys = new Set();
+
+        // Opening balance
+        transactions.push({
+          type: "Old Balance",
+          date: createdAt,
+          source: "-",
+          notes: "Opening balance",
+          amount: openingBalance,
+          createdAt: Number(createdAt) || Date.now(),
         });
-      }
-      setExpenseEntries(list);
-    });
-  }, [bankName]);
 
-  /* ================= PAYMENTS ================= */
-  useEffect(() => {
-    if (!bankName) return;
-
-    const paymentRef = ref(db, `payments/bank/${bankName}`);
-    return onValue(paymentRef, (snap) => {
-      const list = [];
-      if (snap.exists()) {
-        Object.values(snap.val()).forEach((dateNode) => {
-          Object.values(dateNode).forEach((p) => {
-            if (!p.amount || !p.date) return;
-
-            list.push({
-              id: `pay-${p.createdAt}`,
-              date: p.date,
-              type: "CREDIT",
-              from: p.fromName || "-",
-              to: p.toName || "-",
-              amount: Number(p.amount),
-              note: p.note || "-",
-              createdAt: Number(p.createdAt),
-              entryType: "PAYMENT",
+        // EXPENSES
+        await new Promise((resolve) =>
+          onValue(ref(db, `expenses/bank/${bankName}`), (snap) => {
+            const data = snap.val() || {};
+            Object.values(data).forEach((e) => {
+              if (!e.amount || !e.date) return;
+              const key = `exp-${e.createdAt}`;
+              if (usedKeys.has(key)) return;
+              usedKeys.add(key);
+              transactions.push({
+                type: "Expense",
+                date: e.date,
+                source: "-",
+                notes: e.expenseFor || "-",
+                amount: -round2(Number(e.amount)),
+                createdAt: Number(e.createdAt) || Date.now(),
+              });
             });
-          });
+            resolve();
+          }, { onlyOnce: true })
+        );
+
+        // PAYMENTS (incoming & outgoing)
+        await new Promise((resolve) =>
+          onValue(paymentsRef, (snap) => {
+            const data = snap.val() || {};
+            Object.values(data).forEach((lvl1) => {
+              Object.values(lvl1).forEach((lvl2) => {
+                Object.values(lvl2).forEach((lvl3) => {
+                  Object.values(lvl3).forEach((p) => {
+                    if (!p.amount || !p.date) return;
+                    const key = `pay-${p.createdAt}`;
+                    if (usedKeys.has(key)) return;
+                    usedKeys.add(key);
+
+                    let amount = round2(Number(p.amount));
+                    let source = "-";
+
+                    // OUTGOING payment (bank paid)
+                    if (p.fromName === bankName) {
+                      amount = -amount;
+                      source = `to ${p.toName}`;
+                    }
+
+                    // INCOMING payment (bank received)
+                    if (p.toName === bankName) {
+                      amount = amount;
+                      source = `from ${p.fromName}`;
+                    }
+
+                    // Skip if the bank is neither sender nor receiver
+                    if (p.fromName !== bankName && p.toName !== bankName) return;
+
+                    transactions.push({
+                      type: "Payment",
+                      date: p.date,
+                      source,
+                      notes: p.note || "-",
+                      amount,
+                      createdAt: Number(p.createdAt) || Date.now(),
+                    });
+                  });
+                });
+              });
+            });
+            resolve();
+          }, { onlyOnce: true })
+        );
+
+        // TRANSFERS TO BANK
+        await new Promise((resolve) =>
+          onValue(ref(db, `transfers/bank/${bankName}`), (snap) => {
+            const data = snap.val() || {};
+            Object.entries(data).forEach(([date, dateNode]) => {
+              Object.values(dateNode).forEach((t) => {
+                if (!t.amount || t.toType !== "bank" || t.toName !== bankName) return;
+                const key = `tr-${t.createdAt}`;
+                if (usedKeys.has(key)) return;
+                usedKeys.add(key);
+                transactions.push({
+                  type: "Transfer",
+                  date: t.date || date,
+                  source: t.from || "-",
+                  notes: t.note || "-",
+                  amount: round2(Number(t.amount)),
+                  createdAt: Number(t.createdAt) || Date.now(),
+                });
+              });
+            });
+            resolve();
+          }, { onlyOnce: true })
+        );
+
+        // FILTER BY DATE
+        let filteredTxns = transactions;
+        if (fromDate) filteredTxns = filteredTxns.filter((t) => new Date(t.date) >= fromDate);
+        if (toDate) filteredTxns = filteredTxns.filter((t) => new Date(t.date) <= toDate);
+
+        // SORT & running balance
+        filteredTxns.sort((a, b) => new Date(a.date) - new Date(b.date));
+        let runningBalance = 0;
+        const finalTxns = filteredTxns.map((t, i) => {
+          runningBalance = i === 0 ? round2(t.amount) : round2(runningBalance + t.amount);
+          return { ...t, runningBalance };
         });
+
+        setLedgerData({ bankName, transactions: finalTxns, balance: runningBalance });
+        set(ref(db, `banks/${bankId}/balance`), runningBalance);
+
+        // Last page
+        const totalPages = Math.ceil(finalTxns.length / itemsPerPage);
+        setCurrentPage(totalPages > 0 ? totalPages : 1);
+      } catch (err) {
+        console.error("Ledger error:", err);
+      } finally {
+        setLoading(false);
       }
-      setPaymentEntries(list);
-    });
-  }, [bankName]);
+    };
 
-  /* ================= TRANSFERS ================= */
-  useEffect(() => {
-    if (!bankName) return;
+    handleUpdate();
 
-    const transferRef = ref(db, `transfers/bank/${bankName}`);
-    return onValue(transferRef, (snap) => {
-      const list = [];
-      if (!snap.exists()) {
-        setTransferEntries([]);
-        return;
-      }
+    return () => {
+      off(paymentsRef, "value");
+    };
+  }, [bankId, fromDate, toDate]);
 
-      Object.entries(snap.val()).forEach(([date, dateNode]) => {
-        Object.values(dateNode).forEach((t) => {
-          if (!t.amount || t.toType !== "bank" || t.toName !== bankName) return;
+  const totalPages = useMemo(
+    () => Math.ceil(ledgerData.transactions.length / itemsPerPage),
+    [ledgerData.transactions.length]
+  );
 
-          list.push({
-            id: `tr-${t.createdAt}`,
-            date,
-            type: "CREDIT",
-            from: t.from || "-",
-            to: bankName,
-            amount: Number(t.amount),
-            note: t.note || "-",
-            createdAt: Number(t.createdAt || 0),
-            entryType: "TRANSFER",
-          });
-        });
-      });
+  const paginatedTransactions = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return ledgerData.transactions.slice(start, start + itemsPerPage);
+  }, [ledgerData.transactions, currentPage]);
 
-      setTransferEntries(list);
-    });
-  }, [bankName]);
-
-  /* ================= COMBINE + SORT ================= */
-  const entries = useMemo(() => {
-    return [...expenseEntries, ...paymentEntries, ...transferEntries].sort(
-      (a, b) => a.createdAt - b.createdAt
-    );
-  }, [expenseEntries, paymentEntries, transferEntries]);
-
-  /* ================= FILTER + RUNNING BALANCE ================= */
-  const filteredEntries = useMemo(() => {
-    let running = 0;
-    return entries
-      .filter((e) => {
-        const d = new Date(e.date).getTime();
-        if (fromDate && d < new Date(fromDate).getTime()) return false;
-        if (toDate && d > new Date(toDate).getTime()) return false;
-        return true;
-      })
-      .map((e) => {
-        running += e.type === "CREDIT" ? e.amount : -e.amount;
-        return { ...e, balance: running };
-      });
-  }, [entries, fromDate, toDate]);
-
-  /* ================= CALCULATE TOP BALANCE & UPDATE FIREBASE ================= */
-  useEffect(() => {
-    let total = 0;
-    entries.forEach((e) => {
-      total += e.type === "CREDIT" ? e.amount : -e.amount;
-    });
-    setBalance(total);
-
-    // Update Firebase
-    if (bankName) {
-      set(ref(db, `banks/${bankId}/balance`), total);
-    }
-  }, [entries, bankName, bankId]);
-
-  /* ================= EXPORT ================= */
-  const exportCSV = () => {
-    const header = ["Date", "Source", "From", "To", "Type", "Amount", "Balance", "Note"];
-    const body = filteredEntries.map((r) => [
-      formatDate(r.date),
-      r.entryType,
-      r.from,
-      r.to,
-      r.type,
-      r.amount,
-      r.balance,
-      r.note,
-    ]);
-    const csv = [header, ...body].map((r) => r.join(",")).join("\n");
-
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${bankName}-ledger.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const formatDate = (d) => {
+    if (!d) return "-";
+    const date = new Date(d);
+    return `${String(date.getDate()).padStart(2, "0")}-${String(date.getMonth() + 1).padStart(2, "0")}-${date.getFullYear()}`;
   };
 
-  /* ================= UI ================= */
+  const handlePrint = useReactToPrint({
+    content: () => printRef.current,
+    documentTitle: `${ledgerData.bankName}_ledger`,
+  });
+
+  if (loading) return <div className="p-4">Loading...</div>;
+
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
-      {/* Header */}
-      <header className="flex items-center justify-between border-b pb-2">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <h1 className="text-lg font-semibold">{bankName}</h1>
-        <Button size="sm" onClick={exportCSV}>
-          <Download className="h-4 w-4 mr-2" />
-          Export
-        </Button>
-      </header>
+      {/* HEADER */}
+      <div className="flex items-center justify-between border-b pb-2 relative">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(-1)}
+            className="h-9 w-9 p-0"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
 
-      {/* Top Balance + Date Filter */}
-      <div className="bg-white p-5 rounded-xl shadow border w-full flex justify-between items-center">
-        <h2 className="text-xl font-bold">Balance: {formatNumber(balance)}</h2>
-        <div className="flex gap-2 items-center">
-          <span>From:</span>
-          <input
-            type="date"
-            className="border p-2 rounded"
-            value={fromDate || ""}
-            onChange={(e) => setFromDate(e.target.value)}
+          {/* DATE PICKERS */}
+          <DatePicker
+            selected={fromDate}
+            onChange={(date) => setFromDate(date)}
+            placeholderText="From"
+            className="border border-gray-400 rounded px-2 py-1 text-sm"
+            isClearable
           />
-          <span>To:</span>
-          <input
-            type="date"
-            className="border p-2 rounded"
-            value={toDate || ""}
-            onChange={(e) => setToDate(e.target.value)}
+          <DatePicker
+            selected={toDate}
+            onChange={(date) => setToDate(date)}
+            placeholderText="To"
+            className="border border-gray-400 rounded px-2 py-1 text-sm"
+            isClearable
           />
+        </div>
+
+        <Button onClick={handlePrint} className="absolute right-0 top-1/2 -translate-y-1/2 h-9 text-sm">
+          Print Ledger
+        </Button>
+      </div>
+
+      {/* PRINT AREA */}
+      <div ref={printRef}>
+        <h1 className="text-3xl font-semibold text-center mb-4">{ledgerData.bankName}</h1>
+
+        <div className="overflow-x-auto">
+          <table className="w-full border border-gray-300 text-center">
+            <thead>
+              <tr className="bg-gray-100 text-xl">
+                <th className="border p-3">Date</th>
+                <th className="border p-3">Type</th>
+                <th className="border p-3">Source</th>
+                <th className="border p-3">Notes</th>
+                <th className="border p-3">Amount</th>
+                <th className="border p-3">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedTransactions.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-6">No transactions found</td>
+                </tr>
+              ) : (
+                paginatedTransactions.map((t, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50">
+                    <td className="border p-3">{formatDate(t.date)}</td>
+                    <td className="border p-3">{t.type}</td>
+                    <td className="border p-3">{t.source}</td>
+                    <td className="border p-3">{t.notes}</td>
+                    <td className={`border p-3 font-semibold ${t.amount >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {t.amount.toFixed(2)}
+                    </td>
+                    <td className={`border p-3 font-semibold ${t.runningBalance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {t.runningBalance.toFixed(2)}
+                    </td>
+                  </tr>
+                ))
+              )}
+
+              {/* Current balance */}
+              <tr className="bg-gray-100 border-t-2">
+                <td className="border p-3 text-right"></td>
+                <td colSpan={4} className="border p-3 text-end font-semibold text-black">
+                  Current Balance
+                </td>
+                <td className="border p-3 font-bold text-center">
+                  <span className={`${ledgerData.balance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    {ledgerData.balance.toFixed(2)}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {/* Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Transactions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="min-w-full border text-sm text-center">
-              <thead className="bg-muted">
-                <tr>
-                  <th className="border p-2">Date</th>
-                  <th className="border p-2">Source</th>
-                  <th className="border p-2">From</th>
-                  <th className="border p-2">To</th>
-                  <th className="border p-2">Type</th>
-                  <th className="border p-2">Amount</th>
-                  <th className="border p-2">Balance</th>
-                  <th className="border p-2">Note</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredEntries.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-6 text-muted-foreground">
-                      No transactions found
-                    </td>
-                  </tr>
-                ) : (
-                  filteredEntries.map((r) => (
-                    <tr key={r.id}>
-                      <td className="border p-2">{formatDate(r.date)}</td>
-                      <td className="border p-2">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                            r.entryType === "EXPENSE"
-                              ? "bg-red-100 text-red-700"
-                              : r.entryType === "PAYMENT"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-green-100 text-green-700"
-                          }`}
-                        >
-                          {r.entryType}
-                        </span>
-                      </td>
-                      <td className="border p-2">{r.from}</td>
-                      <td className="border p-2">{r.to}</td>
-                      <td
-                        className={`border p-2 font-semibold ${
-                          r.type === "CREDIT"
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }`}
-                      >
-                        {r.type}
-                      </td>
-                      <td className="border p-2">{formatNumber(r.amount)}</td>
-                      <td className="border p-2 font-semibold">
-                        {formatNumber(r.balance)}
-                      </td>
-                      <td className="border p-2">{r.note}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      {/* PAGINATION */}
+      <div className="fixed bottom-0 left-0 w-full bg-white border-t p-4 flex justify-center items-center gap-2 shadow-md z-50">
+        <Button
+          size="sm"
+          disabled={currentPage === 1}
+          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+        >
+          Prev
+        </Button>
+        <span>
+          Page {currentPage} of {totalPages}
+        </span>
+        <Button
+          size="sm"
+          disabled={currentPage === totalPages}
+          onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+        >
+          Next
+        </Button>
+      </div>
     </div>
   );
-}
+};
+
+export default BankLedgerScreen;

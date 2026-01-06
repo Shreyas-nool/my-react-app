@@ -19,7 +19,7 @@ const PaymentScreen = () => {
     const paymentsRef = ref(db, "payments");
 
     const unsub = onValue(paymentsRef, (snapshot) => {
-      const map = new Map(); // prevent duplicate txnId
+      const map = new Map();
 
       if (snapshot.exists()) {
         const data = snapshot.val();
@@ -34,6 +34,7 @@ const PaymentScreen = () => {
                   map.set(txn.txnId, {
                     id: txn.txnId,
                     date: txn.date || date,
+                    createdAt: txn.createdAt || Number(txn.txnId), // 🔑 use timestamp for sorting
                     from: txn.fromName || "-",
                     to: txn.toName || "-",
                     amount: Number(txn.amount || 0),
@@ -50,7 +51,12 @@ const PaymentScreen = () => {
         });
       }
 
-      setPayments(Array.from(map.values()));
+      // 🔥 SORT LATEST FIRST BY createdAt
+      const sorted = Array.from(map.values()).sort(
+        (a, b) => b.createdAt - a.createdAt
+      );
+
+      setPayments(sorted);
     });
 
     return () => unsub();
@@ -102,7 +108,7 @@ const PaymentScreen = () => {
           <ArrowLeft className="h-4 w-4" />
         </Button>
 
-        <h1 className="text-xl font-semibold text-center">
+        <h1 className="text-2xl font-semibold text-center">
           Payments Record
         </h1>
 
@@ -137,7 +143,7 @@ const PaymentScreen = () => {
       <div className="overflow-x-auto">
         <table className="w-full border border-gray-300 text-center">
           <thead>
-            <tr className="bg-gray-100">
+            <tr className="bg-gray-100 text-lg">
               <th className="border p-3">Date</th>
               <th className="border p-3">From</th>
               <th className="border p-3">To</th>
@@ -160,7 +166,7 @@ const PaymentScreen = () => {
                   <td className="border p-3">{formatDate(p.date)}</td>
                   <td className="border p-3">{p.from}</td>
                   <td className="border p-3">{p.to}</td>
-                  <td className="border p-3">₹{p.amount.toFixed(2)}</td>
+                  <td className="border p-3">{p.amount.toFixed(2)}</td>
                   <td className="border p-3">{p.note}</td>
                   <td className="border p-3">
                     <Button

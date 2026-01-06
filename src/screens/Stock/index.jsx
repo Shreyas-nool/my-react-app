@@ -1,4 +1,3 @@
-// src/screens/stock/StockScreen.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "../../components/ui/button";
@@ -30,7 +29,8 @@ const StockScreen = () => {
     ).padStart(2, "0")}-${d.getFullYear()}`;
   };
 
-  const round2 = (num) => Math.round((Number(num) + Number.EPSILON) * 100) / 100;
+  const round2 = (num) =>
+    Math.round((Number(num) + Number.EPSILON) * 100) / 100;
 
   /* ---------- Load Stock with Live Auto-delete ---------- */
   useEffect(() => {
@@ -82,7 +82,8 @@ const StockScreen = () => {
 
   /* ---------- Filters ---------- */
   const filteredStock = stock.filter((s) => {
-    const matchesCategory = activeCategory === "ALL" || s.category === activeCategory;
+    const matchesCategory =
+      activeCategory === "ALL" || s.category === activeCategory;
     const matchesSearch =
       searchQuery === "" ||
       s.productName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -100,8 +101,12 @@ const StockScreen = () => {
       aVal = new Date(a.date).getTime();
       bVal = new Date(b.date).getTime();
     } else if (sortConfig.key === "totalValue") {
-      const aTotal = (Number(a.boxes) * Number(a.piecesPerBox) || 0) * Number(a.pricePerPiece || 0);
-      const bTotal = (Number(b.boxes) * Number(b.piecesPerBox) || 0) * Number(b.pricePerPiece || 0);
+      const aTotal =
+        (Number(a.boxes) * Number(a.piecesPerBox) || 0) *
+        Number(a.pricePerPiece || 0);
+      const bTotal =
+        (Number(b.boxes) * Number(b.piecesPerBox) || 0) *
+        Number(b.pricePerPiece || 0);
       aVal = aTotal;
       bVal = bTotal;
     } else {
@@ -152,6 +157,23 @@ const StockScreen = () => {
         >
           <Plus className="h-4 w-4 mr-2" /> Add Stock
         </Button>
+      </div>
+
+      {/* Category Pills */}
+      <div className="flex flex-wrap gap-2 justify-center">
+        {categories.map((cat) => (
+          <button
+            key={cat}
+            className={`px-4 py-1 rounded-full text-sm font-medium border ${
+              activeCategory === cat
+                ? "bg-blue-600 text-white border-blue-600"
+                : "bg-gray-100 text-gray-800 border-gray-300"
+            }`}
+            onClick={() => setActiveCategory(cat)}
+          >
+            {cat}
+          </button>
+        ))}
       </div>
 
       {/* Search */}

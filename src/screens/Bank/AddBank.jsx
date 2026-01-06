@@ -13,7 +13,7 @@ import { Label } from "../../components/ui/label";
 
 import { useState } from "react";
 
-// 🔹 Firebase
+// Firebase
 import { db } from "../../firebase";
 import { ref, set } from "firebase/database";
 import { v4 as uuidv4 } from "uuid";
@@ -33,20 +33,31 @@ const AddBank = () => {
 
     const bankId = uuidv4();
     const opening = Number(openingBalance) || 0;
+    const todayKey = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
 
     const newBank = {
       id: bankId,
       bankName: bankName.trim(),
-      openingBalance: opening, // shown as entered
-      balance: opening,        // running balance starts here
-      createdAt: new Date().toISOString(),
-      entries: {},
+      openingBalance: opening,       // reference opening balance
+      balance: opening,              // live balance starts here
+      createdAt: Date.now(),
+      // Ledger entries: opening balance recorded once
+      entries:
+        opening !== 0
+          ? {
+              [todayKey]: {
+                opening: {
+                  amount: opening,
+                  note: "Opening Balance",
+                  createdAt: Date.now(),
+                },
+              },
+            }
+          : {},
     };
 
     try {
-      const bankRef = ref(db, `banks/${bankId}`);
-      await set(bankRef, newBank);
-
+      await set(ref(db, `banks/${bankId}`), newBank);
       alert("✅ Bank added successfully!");
       navigate("/banks");
     } catch (error) {
@@ -59,12 +70,7 @@ const AddBank = () => {
     <div className="flex flex-col max-w-7xl mx-auto mt-6 h-screen bg-background p-2 sm:p-4 space-y-3 overflow-hidden">
       {/* Header */}
       <header className="flex items-center justify-between py-2 sm:py-3 border-b border-border/40">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate("/banks")}
-          className="h-8 w-8 sm:h-9 sm:w-9 hover:bg-accent"
-        >
+        <Button variant="ghost" size="icon" onClick={() => navigate("/banks")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
 
@@ -81,9 +87,7 @@ const AddBank = () => {
       <main className="flex-1 overflow-y-auto pb-6">
         <Card className="max-w-md mx-auto shadow-sm border-border/40">
           <CardHeader>
-            <CardTitle className="text-base sm:text-lg font-semibold">
-              New Bank
-            </CardTitle>
+            <CardTitle className="text-base sm:text-lg font-semibold">New Bank</CardTitle>
             <CardDescription className="text-xs sm:text-sm">
               Add bank details for financial records.
             </CardDescription>
@@ -99,6 +103,7 @@ const AddBank = () => {
                   onChange={(e) => setBankName(e.target.value)}
                   placeholder="Enter bank name"
                   className="h-10"
+                  required
                 />
               </div>
 
