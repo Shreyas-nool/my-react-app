@@ -36,6 +36,7 @@ const AddParty = () => {
       name: name.trim(),
       city: city.trim(),
       mobile: mobile.trim(),
+      openingBalance: openingBalance,
       partyType,
       creditPeriod: Number(creditPeriod) || 0,
 
