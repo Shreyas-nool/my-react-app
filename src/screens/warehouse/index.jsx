@@ -123,8 +123,8 @@ const WareHouse = () => {
                         key={w.id}
                         className="hover:bg-muted/30 cursor-pointer transition"
                         onClick={() =>
-                          navigate(`/warehouse/${encodeURIComponent(w.name)}/stocks`, {
-                            state: { warehouseId: w.id }
+                          navigate("/stock", {
+                            state: { warehouseName: w.name },
                           })
                         }
                       >

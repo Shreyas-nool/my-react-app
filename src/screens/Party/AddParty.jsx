@@ -28,10 +28,8 @@ const AddParty = () => {
 
     const partyId = uuidv4();
 
-    // IMPORTANT LOGIC
-    // User enters amount party owes us → store as positive openingBalance
-    // Live balance must start NEGATIVE
-    const openingBal = Number(openingBalance) || 0;
+    // Convert opening balance to number, default 0
+    const initialBalance = Number(openingBalance) || 0;
 
     const partyData = {
       id: partyId,
@@ -41,11 +39,11 @@ const AddParty = () => {
       partyType,
       creditPeriod: Number(creditPeriod) || 0,
 
-      openingBalance: openingBal,   // reference only
-      balance: -openingBal,         // LIVE balance (correct accounting)
+      // LIVE balance starts with the opening balance
+      balance: -initialBalance, // negative because party owes us
 
       createdAt: new Date().toISOString(),
-      entries: {}                   // future transactions go here
+      entries: {}, // future transactions
     };
 
     try {
@@ -92,7 +90,7 @@ const AddParty = () => {
 
           {/* City */}
           <div>
-            <label className="text-sm font-medium">City</label>
+            <label className="text-sm font-medium">Place</label>
             <input
               className="w-full border rounded p-2"
               value={city}
@@ -113,7 +111,7 @@ const AddParty = () => {
           {/* Opening Balance */}
           <div>
             <label className="text-sm font-medium">
-              Opening Balance (Party owes you)
+              Old Balance
             </label>
             <input
               type="number"
@@ -121,11 +119,7 @@ const AddParty = () => {
               className="w-full border rounded p-2"
               value={openingBalance}
               onChange={(e) => setOpeningBalance(e.target.value)}
-              placeholder="Eg: 200.00"
             />
-            <p className="text-xs text-gray-500 mt-1">
-              This amount will be stored as negative balance internally
-            </p>
           </div>
 
           {/* Credit Period */}

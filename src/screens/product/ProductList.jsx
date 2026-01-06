@@ -73,7 +73,7 @@ const ProductList = () => {
           <ArrowLeft className="h-4 w-4" />
         </Button>
 
-        <h1 className="text-lg sm:text-xl font-semibold text-foreground/90">
+        <h1 className="text-2xl sm:text-2xl font-semibold text-foreground/90">
           Product List
         </h1>
 

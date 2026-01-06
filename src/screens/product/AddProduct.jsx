@@ -233,6 +233,7 @@ const handleSubmit = async (e) => {
               onChange={(d) => setCreatedAt(d)}
               dateFormat="dd/MM/yyyy"
               className="w-full border rounded px-3 py-2"
+              maxDate={new Date()} 
             />
           </div>
 

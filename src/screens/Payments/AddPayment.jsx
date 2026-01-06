@@ -197,7 +197,6 @@ export default function AddPayment() {
     };
 
     const updateBalance = async (type, entity, delta) => {
-      if (type === "bank") return; // skip banks
       const balRef = ref(db, `${nodeMap[type]}/${entity.parentKey}/balance`);
       const snap = await get(balRef);
       const current = snap.exists() ? Number(snap.val()) : 0;
@@ -284,6 +283,7 @@ export default function AddPayment() {
                     onChange={setDate}
                     className="w-full border rounded p-2"
                     dateFormat="dd-MM-yyyy"
+                    maxDate={new Date()}
                   />
                 </div>
                 <div>

@@ -20,18 +20,16 @@ import {
 
 const JRPurchases = () => {
   const navigate = useNavigate();
-
   const [entries, setEntries] = useState([]);
   const [balance, setBalance] = useState(0);
   const [fromDate, setFromDate] = useState(null);
   const [toDate, setToDate] = useState(null);
-  const [testAdd, setTestAdd] = useState(""); // <-- input for adding money
+  const [testAdd, setTestAdd] = useState("");
 
   const BANK_NAME = "JR";
 
   const formatAmount = (num) => Number(num).toFixed(2);
 
-  // ------------------- FETCH DATA -------------------
   useEffect(() => {
     const paymentsRef = ref(db, `payments/account/${BANK_NAME}`);
     const expenseRef = ref(db, "expenses");
@@ -55,6 +53,7 @@ const JRPurchases = () => {
           const amt = Number(p.amount || 0);
           if (p.toType === "account" && p.toName === BANK_NAME) bal += amt;
           if (p.fromType === "account" && p.fromName === BANK_NAME) bal -= amt;
+
           temp.push({
             key: p.txnId,
             path: `payments/account/${BANK_NAME}/${date}/${txnId}`,
@@ -63,6 +62,8 @@ const JRPurchases = () => {
             amount: amt,
             notes: p.note || "-",
             from: p.fromName || "-",
+            to: p.toName || "-",
+            incoming: p.toType === "account" && p.toName === BANK_NAME,
           });
         });
       });
@@ -84,6 +85,8 @@ const JRPurchases = () => {
               amount: amt,
               notes: exp.expenseFor || "-",
               from: entityName,
+              to: "-", // Expenses have no "to"
+              incoming: false,
             });
           });
         });
@@ -96,6 +99,7 @@ const JRPurchases = () => {
             Object.entries(items || {}).forEach(([key, t]) => {
               if (!t || seenKeys.has(key)) return;
               const amt = Number(t.amount || 0);
+
               if (t.from === BANK_NAME) {
                 bal -= amt;
                 temp.push({
@@ -105,7 +109,9 @@ const JRPurchases = () => {
                   type: "Transfer",
                   amount: amt,
                   notes: t.note || "-",
-                  from: `${t.from} → ${t.toName || name}`,
+                  from: t.from,
+                  to: t.toName || "-",
+                  incoming: false,
                 });
                 seenKeys.add(key);
               } else if (t.toName === BANK_NAME) {
@@ -118,6 +124,8 @@ const JRPurchases = () => {
                   amount: amt,
                   notes: t.note || "-",
                   from: t.from || "-",
+                  to: BANK_NAME,
+                  incoming: true,
                 });
                 seenKeys.add(key);
               }
@@ -127,7 +135,6 @@ const JRPurchases = () => {
       });
 
       temp.sort((a, b) => new Date(b.date) - new Date(a.date));
-
       setEntries(temp);
       setBalance(Math.round((bal + Number.EPSILON) * 100) / 100);
       set(jrBalanceRef, Math.round((bal + Number.EPSILON) * 100) / 100);
@@ -153,13 +160,11 @@ const JRPurchases = () => {
     };
   }, []);
 
-  // ------------------- DELETE ENTRY -------------------
   const handleDelete = async (path) => {
     if (!window.confirm("Delete this entry?")) return;
     await remove(ref(db, path));
   };
 
-  // ------------------- ADD TO BALANCE (TEST, CREATE ENTRY) -------------------
   const handleAddBalance = async () => {
     const amt = Number(testAdd);
     if (!amt || amt <= 0) return;
@@ -167,7 +172,6 @@ const JRPurchases = () => {
     const date = new Date().toISOString().split("T")[0];
     const time = Date.now();
 
-    // Create a payment entry to mimic a real deposit
     const entryRef = push(ref(db, `payments/account/${BANK_NAME}/${date}`));
     await set(entryRef, {
       amount: amt,
@@ -181,15 +185,9 @@ const JRPurchases = () => {
       txnId: entryRef.key,
     });
 
-    // Update balance separately
-    const balRef = ref(db, `accounts/${BANK_NAME}/balance`);
-    set(balRef, balance + amt);
-
-    // Reset input
     setTestAdd("");
   };
 
-  // ------------------- FILTER ENTRIES -------------------
   const filtered = entries.filter((e) => {
     const d = new Date(e.date);
     if (fromDate && d < fromDate) return false;
@@ -205,22 +203,21 @@ const JRPurchases = () => {
           <ArrowLeft />
         </Button>
 
-        <h1 className="text-lg font-semibold">{BANK_NAME}</h1>
+        <h1 className="text-lg font-semibold">{BANK_NAME} Ledger</h1>
 
         <Button
-          className="bg-black text-white"
+          className="bg-black text-white flex items-center gap-1"
           onClick={() => navigate("/jr/transfer")}
         >
-          <Plus className="h-4 w-4 mr-1" />
+          <Plus className="h-4 w-4" />
           Transfer Money
         </Button>
       </div>
 
-      {/* BALANCE + ADD MONEY */}
+      {/* BALANCE + ADD MONEY + FILTERS */}
       <div className="bg-white p-5 rounded-xl shadow border flex flex-col md:flex-row justify-between items-center gap-4">
         <h2 className="text-xl font-bold">Balance: ₹{formatAmount(balance)}</h2>
 
-        {/* TEST ADD INPUT */}
         <div className="flex gap-2 items-center">
           <Input
             type="number"
@@ -264,6 +261,7 @@ const JRPurchases = () => {
               <TableHead>Amount</TableHead>
               <TableHead>Notes</TableHead>
               <TableHead>From</TableHead>
+              <TableHead>To</TableHead>
               <TableHead>Action</TableHead>
             </TableRow>
           </TableHeader>
@@ -271,7 +269,7 @@ const JRPurchases = () => {
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center">
+                <TableCell colSpan={7} className="text-center">
                   No records found
                 </TableCell>
               </TableRow>
@@ -284,15 +282,16 @@ const JRPurchases = () => {
                   <TableCell>{e.type}</TableCell>
                   <TableCell
                     className={
-                      e.type === "Expense" || e.type === "Transfer"
-                        ? "text-red-600 font-semibold"
-                        : "text-green-600 font-semibold"
+                      e.incoming
+                        ? "text-green-600 font-semibold"
+                        : "text-red-600 font-semibold"
                     }
                   >
                     ₹{formatAmount(e.amount)}
                   </TableCell>
                   <TableCell>{e.notes}</TableCell>
                   <TableCell>{e.from}</TableCell>
+                  <TableCell>{e.to || "-"}</TableCell>
                   <TableCell>
                     <Button
                       variant="ghost"

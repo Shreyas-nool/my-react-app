@@ -30,7 +30,6 @@ import LoginScreen from "./screens/Login";
 import PrivateRoute from "./components/PrivateRoute";
 import ProfileScreen from "./screens/Profile";
 import Ledger from "./screens/ledger";
-import AddLedger from "./screens/ledger/AddLedger";
 import Purchase from "./screens/Purchase/Purchase";
 import EditPurchase from "./screens/Purchase/EditPurchase";
 import PaymentScreen from "./screens/Payments/PaymentScreen";
@@ -126,7 +125,6 @@ const router = createBrowserRouter([
 
           // Ledger
           { path: "/ledger", element: <Ledger /> },
-          { path: "/ledger/add", element: <AddLedger /> },
           { path: "/ledger/:id", element: <PartyLedgerScreen /> },
 
           // Purchase

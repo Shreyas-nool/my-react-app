@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
-import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  Trash2,
+  ChevronUp,
+  ChevronDown,
+} from "lucide-react";
 import { db } from "../../firebase";
 import { ref, onValue, set } from "firebase/database";
 
@@ -12,7 +18,7 @@ const SalesScreen = () => {
   const navigate = useNavigate();
 
   const [sales, setSales] = useState([]);
-  const [partiesMap, setPartiesMap] = useState({}); // partyId -> partyName
+  const [partiesMap, setPartiesMap] = useState({});
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDate, setSelectedDate] = useState(null);
   const [sortConfig, setSortConfig] = useState({
@@ -20,6 +26,7 @@ const SalesScreen = () => {
     direction: "desc",
   });
 
+  /* ---------- Helpers ---------- */
   const round2 = (num) =>
     Math.round((Number(num) + Number.EPSILON) * 100) / 100;
 
@@ -32,10 +39,15 @@ const SalesScreen = () => {
     return `${dd}-${mm}-${yyyy}`;
   };
 
+  const isSameDate = (d1, d2) =>
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate();
+
   /* ---------- Fetch Sales ---------- */
   useEffect(() => {
     const salesRef = ref(db, "sales");
-    const unsubscribe = onValue(salesRef, (snapshot) => {
+    const unsub = onValue(salesRef, (snapshot) => {
       const data = snapshot.val();
       if (!data) {
         setSales([]);
@@ -56,13 +68,13 @@ const SalesScreen = () => {
       setSales(arr);
     });
 
-    return () => unsubscribe();
+    return () => unsub();
   }, []);
 
-  /* ---------- Fetch Parties (FIXED) ---------- */
+  /* ---------- Fetch Parties (name + city) ---------- */
   useEffect(() => {
     const partyRef = ref(db, "parties");
-    const unsubscribe = onValue(partyRef, (snapshot) => {
+    const unsub = onValue(partyRef, (snapshot) => {
       const data = snapshot.val();
       if (!data) {
         setPartiesMap({});
@@ -71,32 +83,31 @@ const SalesScreen = () => {
 
       const map = {};
       Object.entries(data).forEach(([id, details]) => {
-        map[id] = details.name || "-";
+        map[id] = {
+          name: details.name || "-",
+          city: details.city || "-",
+        };
       });
 
       setPartiesMap(map);
     });
 
-    return () => unsubscribe();
+    return () => unsub();
   }, []);
 
   /* ---------- Filters ---------- */
   const filteredSales = sales.filter((sale) => {
     const q = searchQuery.toLowerCase();
-    const partyName = partiesMap[sale.partyId]?.toLowerCase() || "";
+    const party = partiesMap[sale.partyId] || {};
 
     const matchesSearch =
       sale.invoiceNumber?.toString().includes(q) ||
-      partyName.includes(q);
+      party.name?.toLowerCase().includes(q) ||
+      party.city?.toLowerCase().includes(q);
 
-    const isSameDate = (d1, d2) =>
-    d1.getFullYear() === d2.getFullYear() &&
-    d1.getMonth() === d2.getMonth() &&
-    d1.getDate() === d2.getDate();
-
-  const matchesDate = selectedDate
-    ? isSameDate(new Date(sale.createdAt), selectedDate)
-    : true;
+    const matchesDate = selectedDate
+      ? isSameDate(new Date(sale.createdAt), selectedDate)
+      : true;
 
     return matchesSearch && matchesDate;
   });
@@ -106,8 +117,8 @@ const SalesScreen = () => {
     let aVal, bVal;
 
     if (sortConfig.key === "party") {
-      aVal = partiesMap[a.partyId] || "";
-      bVal = partiesMap[b.partyId] || "";
+      aVal = partiesMap[a.partyId]?.name || "";
+      bVal = partiesMap[b.partyId]?.name || "";
     } else if (sortConfig.key === "createdAt") {
       aVal = new Date(a.createdAt).getTime();
       bVal = new Date(b.createdAt).getTime();
@@ -138,6 +149,7 @@ const SalesScreen = () => {
     );
   };
 
+  /* ---------- Delete Invoice ---------- */
   const deleteInvoice = (sale) => {
     if (!window.confirm("Delete this invoice?")) return;
     const delRef = ref(db, `sales/${sale._dateKey}/${sale._invoiceKey}`);
@@ -149,29 +161,25 @@ const SalesScreen = () => {
     <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
       {/* Header */}
       <div className="relative border-b pb-2 flex items-center justify-center">
-        {/* Back Button */}
         <Button
           variant="ghost"
           size="sm"
           onClick={() => navigate("/")}
-          className="absolute left-0 top-1/2 transform -translate-y-1/2 h-9 w-9 p-0"
+          className="absolute left-0 top-1/2 -translate-y-1/2 h-9 w-9 p-0"
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
 
-        {/* Title */}
         <h1 className="text-xl font-semibold text-center">Sales Invoices</h1>
 
-        {/* Create Sales Button */}
         <Button
           onClick={() => navigate("/sales/create-sales")}
-          className="absolute right-0 top-1/2 transform -translate-y-1/2 h-9 text-sm flex items-center"
+          className="absolute right-0 top-1/2 -translate-y-1/2 h-9 text-sm flex items-center"
         >
           <Plus className="h-4 w-4 mr-2" />
           Create Sales
         </Button>
       </div>
-
 
       {/* Filters */}
       <div className="flex justify-center gap-4">
@@ -197,23 +205,34 @@ const SalesScreen = () => {
         <table className="w-full table-auto border border-gray-300 text-center">
           <thead>
             <tr className="bg-gray-100 text-base">
-              <th className="border p-3 cursor-pointer" onClick={() => handleSort("createdAt")}>
+              <th
+                className="border p-2 w-35 text-base font-semibold cursor-pointer"
+                onClick={() => handleSort("createdAt")}
+              >
                 Invoice Date {renderSortIcon("createdAt")}
               </th>
-              <th className="border p-3 cursor-pointer" onClick={() => handleSort("invoiceNumber")}>
+              <th
+                className="border p-3 cursor-pointer"
+                onClick={() => handleSort("invoiceNumber")}
+              >
                 Invoice No {renderSortIcon("invoiceNumber")}
               </th>
-              <th className="border p-3 cursor-pointer" onClick={() => handleSort("party")}>
+              <th
+                className="border p-3 cursor-pointer"
+                onClick={() => handleSort("party")}
+              >
                 Party {renderSortIcon("party")}
               </th>
+              <th className="border p-3">Place</th>
               <th className="border p-3">Total</th>
               <th className="border p-3">Action</th>
             </tr>
           </thead>
+
           <tbody>
             {sortedSales.length === 0 ? (
               <tr>
-                <td colSpan={5} className="p-6">
+                <td colSpan={6} className="p-6">
                   No invoices found.
                 </td>
               </tr>
@@ -226,9 +245,16 @@ const SalesScreen = () => {
                   )
                 );
 
+                const party = partiesMap[sale.partyId] || {};
+
                 return (
-                  <tr key={sale._invoiceKey} className="hover:bg-gray-50 text-base">
-                    <td className="border p-3">{formatDate(sale.createdAt)}</td>
+                  <tr
+                    key={sale._invoiceKey}
+                    className="hover:bg-gray-50 text-base"
+                  >
+                    <td className="border p-5 text-m">
+                      {formatDate(sale.createdAt)}
+                    </td>
                     <td className="border p-3">
                       <button
                         className="text-blue-600 underline"
@@ -239,9 +265,8 @@ const SalesScreen = () => {
                         {sale.invoiceNumber}
                       </button>
                     </td>
-                    <td className="border p-3">
-                      {partiesMap[sale.partyId] || "-"}
-                    </td>
+                    <td className="border p-3">{party.name || "-"}</td>
+                    <td className="border p-3">{party.city || "-"}</td>
                     <td className="border p-3">
                       {totalAmount.toFixed(2)}
                     </td>

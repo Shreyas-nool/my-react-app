@@ -1,176 +1,293 @@
-import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import React, { useEffect, useState, useRef } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
-import { ref, get, update, set } from "firebase/database";
+import { ref, onValue, off, set } from "firebase/database";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import { Button } from "../../components/ui/button";
+import { ArrowLeft } from "lucide-react";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 const PartyLedgerScreen = () => {
-  const { id } = useParams(); // party firebase key
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const tableRef = useRef();
+
   const [ledgerData, setLedgerData] = useState({
     partyName: "",
-    openingBalance: 0,
     transactions: [],
+    balance: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [fromDate, setFromDate] = useState(null);
+  const [toDate, setToDate] = useState(null);
 
-  // ✅ Round to 2 decimals
-  const round2 = (num) => Math.round((Number(num) + Number.EPSILON) * 100) / 100;
+  const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
   useEffect(() => {
-    const fetchAndUpdateSummary = async () => {
-      setLoading(true);
+    setLoading(true);
+    const partyRef = ref(db, `parties/${id}`);
+    const salesRef = ref(db, "sales");
+    const paymentsRef = ref(db, "payments");
+
+    const handleUpdate = async () => {
       try {
-        const partySnap = await get(ref(db, `parties/${id}`));
-        const partyObj = partySnap.val();
-        const partyName = partyObj?.name || id;
-        const openingBalance = round2(Number(partyObj?.openingBalance || 0));
+        const partySnap = await new Promise((resolve) => onValue(partyRef, resolve, { onlyOnce: true }));
+        const party = partySnap.val();
+        if (!party) return;
+
+        const partyName = party.name;
+        const openingBalance = round2(Number(party.openingBalance || 0));
+        const createdAt = party.createdAt;
 
         const transactions = [];
+        const usedKeys = new Set();
 
-        // Sales → DEBIT (they owe you)
-        const salesSnap = await get(ref(db, "sales"));
-        const sales = salesSnap.val() || {};
-        Object.values(sales).forEach((sale) => {
-          Object.values(sale).forEach((inv) => {
-            if (inv.party === partyName) {
+        // Opening balance
+        transactions.push({
+          type: "Old Balance",
+          date: createdAt,
+          invoice: "-",
+          source: "-",
+          notes: "Opening balance",
+          amount: openingBalance,
+        });
+
+        // SALES
+        await new Promise((resolve) => onValue(salesRef, (snap) => {
+          const sales = snap.val() || {};
+          Object.values(sales).forEach((group) => {
+            Object.values(group).forEach((inv) => {
+              if (inv.partyId !== id) return;
+              const key = `sale-${inv.invoiceNumber}`;
+              if (usedKeys.has(key)) return;
+              usedKeys.add(key);
+
               const total = round2(inv.items?.reduce((sum, i) => sum + Number(i.total || 0), 0));
+
               transactions.push({
                 type: "Sale",
-                date: inv.createdAt || inv.date,
-                invoice: inv.invoiceNumber || inv.invoice,
-                debit: total,
-                credit: 0,
-                notes: "",
-              });
-            }
-          });
-        });
-
-        // Purchases → CREDIT (you owe them)
-        const purchasesSnap = await get(ref(db, "purchases"));
-        const purchases = purchasesSnap.val() || {};
-        Object.values(purchases).forEach((purchase) => {
-          if (purchase.supplier === partyName) {
-            transactions.push({
-              type: "Purchase",
-              date: purchase.createdAt || purchase.date,
-              invoice: purchase.invoiceNumber || purchase.id,
-              debit: 0,
-              credit: round2(purchase.total || purchase.subtotal || 0),
-              notes: purchase.notes || "",
-            });
-          }
-        });
-
-        // Payments → CREDIT (they paid you)
-        const paymentsSnap = await get(ref(db, "payments"));
-        const allPayments = paymentsSnap.val() || {};
-        if (allPayments[partyName]) {
-          Object.entries(allPayments[partyName]).forEach(([dateKey, paymentNode]) => {
-            Object.values(paymentNode).forEach((payment) => {
-              const amt = round2(Number(payment.amount || 0));
-              transactions.push({
-                type: "Payment",
-                date: payment.createdAt || payment.date || dateKey,
-                invoice: "",
-                debit: 0,
-                credit: amt,
-                notes: payment.bank || "",
+                date: inv.date || inv.createdAt,
+                invoice: inv.invoiceNumber || "-",
+                source: "-",
+                notes: "-",
+                amount: total,
               });
             });
           });
-        }
+          resolve();
+        }, { onlyOnce: true }));
 
-        // Sort by full timestamp → oldest first
+        // PAYMENTS
+        await new Promise((resolve) => onValue(paymentsRef, (snap) => {
+          const payments = snap.val() || {};
+          Object.values(payments).forEach((l1) => {
+            Object.values(l1).forEach((l2) => {
+              Object.values(l2).forEach((l3) => {
+                Object.values(l3).forEach((p) => {
+                  if (!p?.txnId) return;
+                  const key = `payment-${p.txnId}`;
+                  if (usedKeys.has(key)) return;
+                  usedKeys.add(key);
+                  if (p.fromName !== partyName && p.toName !== partyName) return;
+
+                  let amount = round2(Number(p.amount || 0));
+                  let source = "-";
+                  if (p.fromName === partyName) amount = -amount;
+                  if (p.fromName === partyName) source = `to ${p.toName}`;
+                  if (p.toName === partyName) source = `from ${p.fromName}`;
+
+                  transactions.push({
+                    type: "Payment",
+                    date: p.date || p.createdAt,
+                    invoice: "-",
+                    source,
+                    notes: "-",
+                    amount,
+                  });
+                });
+              });
+            });
+          });
+          resolve();
+        }, { onlyOnce: true }));
+
+        // SORT & running balance
         transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-        // Compute running balance
         let runningBalance = 0;
-        let totalDebit = 0;
-        let totalCredit = 0;
-
-        const ledgerEntries = transactions.map((t) => {
-          totalDebit = round2(totalDebit + (t.debit || 0));
-          totalCredit = round2(totalCredit + (t.credit || 0));
-          runningBalance = round2(runningBalance + (t.debit || 0) - (t.credit || 0));
+        const finalTxns = transactions.map((t, i) => {
+          runningBalance = i === 0 ? round2(t.amount) : round2(runningBalance + t.amount);
           return { ...t, runningBalance };
         });
 
-        setLedgerData({
-          partyName,
-          openingBalance,
-          transactions: ledgerEntries,
-        });
-
-        // Save summary
-        const today = new Date().toISOString().split("T")[0];
-        await set(ref(db, `ledgerSummary/${id}`), {
-          partyId: id,
-          partyName,
-          date: today,
-          openingBalance,
-          totalDebit,
-          totalCredit,
-          balance: runningBalance,
-        });
-
-        // Update party balance
-        await update(ref(db, `parties/${id}`), { balance: runningBalance });
+        // Update ledgerData & party balance in Firebase
+        setLedgerData({ partyName, transactions: finalTxns, balance: runningBalance });
+        set(ref(db, `parties/${id}/balance`), runningBalance);
       } catch (err) {
-        console.error("Error fetching/updating ledger summary:", err);
+        console.error("Ledger error:", err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchAndUpdateSummary();
+    // Initial fetch
+    handleUpdate();
+
+    // Real-time listeners
+    const salesListener = onValue(salesRef, handleUpdate);
+    const paymentsListener = onValue(paymentsRef, handleUpdate);
+
+    return () => {
+      off(salesRef, "value", salesListener);
+      off(paymentsRef, "value", paymentsListener);
+    };
   }, [id]);
+
+  const formatDate = (d) => {
+    if (!d) return "-";
+    const date = new Date(d);
+    return `${String(date.getDate()).padStart(2, "0")}-${String(
+      date.getMonth() + 1
+    ).padStart(2, "0")}-${date.getFullYear()}`;
+  };
+
+  const filteredTransactions = ledgerData.transactions.filter((t) => {
+    const tDate = new Date(t.date);
+    if (fromDate && tDate < fromDate) return false;
+    if (toDate && tDate > toDate) return false;
+    return true;
+  });
+
+  const exportPDF = async () => {
+    if (!tableRef.current) return;
+    const canvas = await html2canvas(tableRef.current, { scale: 2 });
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+    pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+    pdf.save(`${ledgerData.partyName}_ledger.pdf`);
+  };
 
   if (loading) return <div className="p-4">Loading...</div>;
 
   return (
-    <div className="p-4 max-w-full">
-      <h2 className="text-xl font-semibold mb-2">Ledger — {ledgerData.partyName}</h2>
+    <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
+      {/* HEADER */}
+      <div className="relative border-b pb-2 flex items-center justify-center">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate(-1)}
+          className="absolute left-0 top-1/2 -translate-y-1/2 h-9 w-9 p-0"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
 
-      <div
-        className={`text-sm mb-4 font-semibold ${
-          ledgerData.openingBalance > 0 ? "text-red-600" : "text-green-600"
-        }`}
-      >
-        Opening Balance: {ledgerData.openingBalance.toFixed(2)}
+        <h1 className="text-xl font-semibold text-center">{ledgerData.partyName}</h1>
+
+        <Button
+          onClick={exportPDF}
+          className="absolute right-0 top-1/2 -translate-y-1/2 h-9 text-sm"
+        >
+          Export PDF
+        </Button>
       </div>
 
-      <div className="overflow-auto bg-white rounded shadow">
-        <table className="min-w-full text-sm divide-y">
-          <thead className="bg-slate-50 sticky top-0">
-            <tr>
-              <th className="p-2 text-left">Date</th>
-              <th className="p-2 text-left">Type</th>
-              <th className="p-2 text-left">Invoice</th>
-              <th className="p-2 text-left">Notes</th>
-              <th className="p-2 text-right">Debit</th>
-              <th className="p-2 text-right">Credit</th>
-              <th className="p-2 text-right">Balance</th>
+      {/* DATE FILTER */}
+      <div className="flex justify-center gap-4 mb-4">
+        <DatePicker
+          selected={fromDate}
+          onChange={(date) => setFromDate(date)}
+          placeholderText="From"
+          className="border border-gray-400 rounded px-3 py-2"
+          isClearable
+        />
+        <DatePicker
+          selected={toDate}
+          onChange={(date) => setToDate(date)}
+          placeholderText="To"
+          className="border border-gray-400 rounded px-3 py-2"
+          isClearable
+        />
+      </div>
+
+      {/* TABLE */}
+      <div className="overflow-x-auto" ref={tableRef}>
+        <table className="w-full border border-gray-300 text-center">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="border p-3">Date</th>
+              <th className="border p-3">Type</th>
+              <th className="border p-3">Invoice</th>
+              <th className="border p-3">Source</th>
+              <th className="border p-3">Notes</th>
+              <th className="border p-3">Amount</th>
+              <th className="border p-3">Balance</th>
             </tr>
           </thead>
 
           <tbody>
-            {ledgerData.transactions.map((t, idx) => (
-              <tr key={idx} className="hover:bg-slate-50">
-                <td className="p-2">{new Date(t.date).toLocaleDateString()}</td>
-                <td className="p-2 capitalize">{t.type}</td>
-                <td className="p-2">{t.invoice}</td>
-                <td className="p-2">{t.notes}</td>
-                <td className="p-2 text-right text-red-600">{t.debit?.toFixed(2) || ""}</td>
-                <td className="p-2 text-right text-green-600">{t.credit?.toFixed(2) || ""}</td>
-                <td
-                  className={`p-2 text-right font-semibold ${
-                    t.runningBalance > 0 ? "text-red-600" : "text-green-600"
-                  }`}
-                >
-                  {t.runningBalance.toFixed(2)}
+            {filteredTransactions.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="p-6">
+                  No transactions found
                 </td>
               </tr>
-            ))}
+            ) : (
+              filteredTransactions.map((t, idx) => (
+                <tr key={idx} className="hover:bg-gray-50">
+                  <td className="border p-3">{formatDate(t.date)}</td>
+                  <td className="border p-3">{t.type}</td>
+                  <td className="border p-3">
+                    {t.invoice !== "-" ? (
+                      <span
+                        onClick={() => navigate(`/invoice/${t.invoice}`)}
+                        className="text-blue-600 underline cursor-pointer"
+                      >
+                        {t.invoice}
+                      </span>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td className="border p-3">{t.source}</td>
+                  <td className="border p-3">{t.notes}</td>
+                  <td
+                    className={`border p-3 font-semibold ${
+                      t.amount >= 0 ? "text-red-600" : "text-green-600"
+                    }`}
+                  >
+                    {t.amount.toFixed(2)}
+                  </td>
+                  <td
+                    className={`border p-3 font-semibold ${
+                      t.runningBalance >= 0 ? "text-red-600" : "text-green-600"
+                    }`}
+                  >
+                    {t.runningBalance.toFixed(2)}
+                  </td>
+                </tr>
+              ))
+            )}
+
+            {/* Current balance row */}
+            <tr className="bg-gray-100 border-t-2">
+              <td className="border p-3 text-right"></td>
+              <td colSpan={5} className="border p-3 text-end font-semibold text-black">
+                Current Balance
+              </td>
+              <td className="border p-3 font-bold text-center">
+                <span
+                  className={`${
+                    ledgerData.balance >= 0 ? "text-red-600" : "text-green-600"
+                  }`}
+                >
+                  {ledgerData.balance.toFixed(2)}
+                </span>
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>

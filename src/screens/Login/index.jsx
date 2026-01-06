@@ -91,7 +91,7 @@ const LoginScreen = () => {
                                 required
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                placeholder="Enter your User ID"
+                                placeholder="Enter your Username"
                                 onClick={() => copyToClipboard(hardcodedUser.email)}
                                 className="w-full rounded-lg bg-white/20 border border-white/30 py-2.5 pl-10 pr-3 text-gray-100 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all text-sm sm:text-base cursor-pointer"
                             />
