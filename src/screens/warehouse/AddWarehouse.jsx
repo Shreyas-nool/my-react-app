@@ -46,7 +46,6 @@ const AddWarehouse = () => {
 
                 <div className="flex-1 text-center">
                     <h1 className="text-xl font-semibold">Warehouse</h1>
-                    <p className="text-xs text-muted-foreground">SR Enterprise</p>
                 </div>
             </header>
 

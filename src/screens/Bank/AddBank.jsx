@@ -10,7 +10,6 @@ import {
 } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
-
 import { useState } from "react";
 
 // Firebase
@@ -22,7 +21,15 @@ const AddBank = () => {
   const navigate = useNavigate();
 
   const [bankName, setBankName] = useState("");
-  const [openingBalance, setOpeningBalance] = useState("");
+  const [openingBalance, setOpeningBalance] = useState("0");
+
+  const getTodayKey = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(d.getDate()).padStart(2, "0")}`;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -33,20 +40,19 @@ const AddBank = () => {
 
     const bankId = uuidv4();
     const opening = Number(openingBalance) || 0;
-    const todayKey = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    const todayKey = getTodayKey();
 
-    const newBank = {
+    const bankData = {
       id: bankId,
       bankName: bankName.trim(),
-      openingBalance: opening,       // reference opening balance
-      balance: opening,              // live balance starts here
+      openingBalance: opening,
+      balance: opening,
       createdAt: Date.now(),
-      // Ledger entries: opening balance recorded once
       entries:
         opening !== 0
           ? {
               [todayKey]: {
-                opening: {
+                opening_balance: {
                   amount: opening,
                   note: "Opening Balance",
                   createdAt: Date.now(),
@@ -57,52 +63,49 @@ const AddBank = () => {
     };
 
     try {
-      await set(ref(db, `banks/${bankId}`), newBank);
-      alert("✅ Bank added successfully!");
+      await set(ref(db, `banks/${bankId}`), bankData);
+      alert("✅ Bank added successfully");
       navigate("/banks");
-    } catch (error) {
-      console.error("Error saving bank:", error);
-      alert("❌ Failed to save bank");
+    } catch (err) {
+      console.error(err);
+      alert("❌ Failed to add bank");
     }
   };
 
   return (
-    <div className="flex flex-col max-w-7xl mx-auto mt-6 h-screen bg-background p-2 sm:p-4 space-y-3 overflow-hidden">
-      {/* Header */}
-      <header className="flex items-center justify-between py-2 sm:py-3 border-b border-border/40">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/banks")}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
+    <div className="min-h-screen flex justify-center pt-16 px-4">
+      {/* Centered horizontally, top spaced */}
+      <div className="w-full max-w-md">
+        {/* Header */}
+        <div className="flex items-center border-b pb-3 mb-6">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/banks")}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
 
-        <div className="flex-1 text-center">
-          <h1 className="text-lg sm:text-xl font-semibold text-foreground">
+          <h1 className="flex-1 text-center text-lg font-semibold">
             Add Bank
           </h1>
+
+          <div className="w-9" />
         </div>
 
-        <div className="w-8 sm:w-9" />
-      </header>
-
-      {/* Form */}
-      <main className="flex-1 overflow-y-auto pb-6">
-        <Card className="max-w-md mx-auto shadow-sm border-border/40">
+        {/* Card */}
+        <Card>
           <CardHeader>
-            <CardTitle className="text-base sm:text-lg font-semibold">New Bank</CardTitle>
-            <CardDescription className="text-xs sm:text-sm">
-              Add bank details for financial records.
-            </CardDescription>
+            <CardTitle>New Bank</CardTitle>
           </CardHeader>
 
           <CardContent>
-            <form className="space-y-4 pt-2" onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
                 <Label>Bank Name</Label>
                 <Input
-                  type="text"
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
-                  placeholder="Enter bank name"
-                  className="h-10"
                   required
                 />
               </div>
@@ -110,24 +113,24 @@ const AddBank = () => {
               <div className="space-y-2">
                 <Label>Opening Balance</Label>
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={openingBalance}
-                  onChange={(e) => setOpeningBalance(e.target.value)}
-                  placeholder="Enter opening balance"
-                  className="h-10"
+                  onChange={(e) =>
+                    setOpeningBalance(e.target.value.replace(/[^0-9.]/g, ""))
+                  }
+                  onWheel={(e) => e.currentTarget.blur()}
                 />
               </div>
 
-              <Button
-                type="submit"
-                className="w-full h-10 gap-2 text-sm font-semibold bg-primary hover:bg-primary/90"
-              >
-                <Save className="h-4 w-4" /> Add Bank
+              <Button type="submit" className="w-full gap-2">
+                <Save className="h-4 w-4" />
+                Save Bank
               </Button>
             </form>
           </CardContent>
         </Card>
-      </main>
+      </div>
     </div>
   );
 };

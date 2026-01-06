@@ -173,8 +173,7 @@ export default function AddExpense() {
                 onChange={(e) => { setCategory(e.target.value); setEntity(""); }}
               >
                 <option value="">Select Category</option>
-                {/* <option value="party">Party</option> */}
-                
+                <option value="party">Party</option>
                 <option value="bank">Bank</option>
                 <option value="account">Account</option>
               </select>
