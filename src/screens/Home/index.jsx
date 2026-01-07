@@ -27,8 +27,8 @@ const tiles = [
     { to: "/jr", label: "JR", icon: User },
     { to: "/duedate", label: "Due Date", icon: CalendarCheck },
     { to: "/warehouse", label: "Warehouse", icon: Warehouse },
-    { to: "/", label: "Malad Payment", icon: Warehouse },
-    { to: "/", label: "Mumbai Payment", icon: Warehouse },
+    { to: "/maladpayment", label: "Malad Payment", icon: Warehouse },
+    { to: "/mumbaipayment", label: "Mumbai Payment", icon: Warehouse },
     { to: "/sr", label: "SR", icon: User },
 ];
 

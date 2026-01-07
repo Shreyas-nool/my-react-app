@@ -30,7 +30,12 @@ const Party = () => {
     return () => unsubscribe();
   }, []);
 
-  // 🔹 Filtered parties based on search
+  // 🔹 Reset page on search
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
+  // 🔹 Filtered parties
   const filteredParties = parties.filter((p) => {
     const q = search.toLowerCase();
     return (
@@ -41,64 +46,52 @@ const Party = () => {
   });
 
   // Pagination calculations
+  const totalPages = Math.ceil(filteredParties.length / partiesPerPage);
   const indexOfLast = currentPage * partiesPerPage;
   const indexOfFirst = indexOfLast - partiesPerPage;
-  const currentParties = filteredParties.slice(indexOfFirst, indexOfLast);
-  const totalPages = Math.ceil(filteredParties.length / partiesPerPage);
+  const currentParties = filteredParties.slice(
+    indexOfFirst,
+    indexOfLast
+  );
 
   // 🔹 Inline update handler
   const handleInlineUpdate = async (id, field, value) => {
-    if (value === "" || value === "-" || value === undefined) return;
-
-    const partyRef = ref(db, `parties/${id}`);
-    await update(partyRef, {
-      [field]: value,
-    });
+    if (!value || value === "-") return;
+    await update(ref(db, `parties/${id}`), { [field]: value });
   };
 
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
-
-      {/* Header */}
-      <header className="flex items-center justify-between py-2 border-b border-border/50">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate("/")}
-          className="h-8 w-8 sm:h-9 sm:w-9 p-0 sm:p-2 hover:bg-accent"
-        >
+      {/* HEADER */}
+      <header className="flex items-center justify-between border-b pb-2">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
 
-        <h1 className="text-2xl sm:text-2xl font-semibold text-foreground/90">
-          Party List
-        </h1>
+        <h1 className="text-2xl font-semibold">Party List</h1>
 
-        <Button
-          onClick={() => navigate("/party/add-party")}
-          className="h-8 sm:h-9 text-sm font-medium bg-primary hover:bg-primary/90"
-        >
+        <Button onClick={() => navigate("/party/add-party")}>
           <Plus className="h-4 w-4 mr-2" />
           Add Party
         </Button>
       </header>
 
-      {/* Search */}
-      <div className="flex justify-center my-2">
+      {/* SEARCH */}
+      <div className="flex justify-center">
         <input
           type="text"
-          placeholder="Search by name, mobile, or city..."
+          placeholder="Search by name, mobile, or place..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="border rounded-md px-3 py-2 text-sm w-full sm:w-1/3"
         />
       </div>
 
-      {/* Table */}
+      {/* TABLE */}
       <div className="overflow-x-auto">
-        <table className="w-full table-auto border border-gray-300 text-center">
-          <thead>
-            <tr className="bg-gray-100 text-sm sm:text-base">
+        <table className="w-full border text-center">
+          <thead className="bg-gray-100">
+            <tr>
               <th className="border p-2">Party Name</th>
               <th className="border p-2">Mobile</th>
               <th className="border p-2">Place</th>
@@ -110,58 +103,52 @@ const Party = () => {
           <tbody>
             {currentParties.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center p-4">
-                  No parties found.
+                <td colSpan={5} className="p-4">
+                  No parties found
                 </td>
               </tr>
             ) : (
               currentParties.map((party) => (
-                <tr key={party.id} className="hover:bg-gray-50 text-sm sm:text-base">
-
-                  {/* Party Name */}
+                <tr key={party.id} className="hover:bg-gray-50">
                   <td className="border p-2">{party.name}</td>
 
-                  {/* Editable Mobile */}
                   <td
-                    className="border p-2 cursor-text hover:bg-yellow-50 focus:bg-yellow-50 outline-none"
+                    className="border p-2 cursor-text"
                     contentEditable
                     suppressContentEditableWarning
                     onBlur={(e) =>
-                      handleInlineUpdate(party.id, "mobile", e.target.innerText.trim())
+                      handleInlineUpdate(
+                        party.id,
+                        "mobile",
+                        e.target.innerText.trim()
+                      )
                     }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        e.currentTarget.blur();
-                      }
-                    }}
                   >
                     {party.mobile ?? "-"}
                   </td>
 
-                  {/* Editable Place/City */}
                   <td
-                    className="border p-2 cursor-text hover:bg-yellow-50 focus:bg-yellow-50 outline-none"
+                    className="border p-2 cursor-text"
                     contentEditable
                     suppressContentEditableWarning
                     onBlur={(e) =>
-                      handleInlineUpdate(party.id, "city", e.target.innerText.trim())
+                      handleInlineUpdate(
+                        party.id,
+                        "city",
+                        e.target.innerText.trim()
+                      )
                     }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        e.currentTarget.blur();
-                      }
-                    }}
                   >
                     {party.city ?? "-"}
                   </td>
 
-                  {/* Balance */}
-                  <td className="border p-2">{Number(party.balance || 0).toFixed(2)}</td>
+                  <td className="border p-2">
+                    {Number(party.balance || 0).toFixed(2)}
+                  </td>
 
-                  {/* Party Type */}
-                  <td className="border p-2">{party.partyType ?? "-"}</td>
+                  <td className="border p-2">
+                    {party.partyType ?? "-"}
+                  </td>
                 </tr>
               ))
             )}
@@ -169,14 +156,14 @@ const Party = () => {
         </table>
       </div>
 
-      {/* Pagination */}
+      {/* PAGINATION */}
       {totalPages > 1 && (
-        <div className="flex justify-center mt-4 gap-2">
+        <div className="flex justify-center gap-2 mt-4">
           <Button
             size="sm"
             variant="outline"
             disabled={currentPage === 1}
-            onClick={() => setCurrentPage((prev) => prev - 1)}
+            onClick={() => setCurrentPage((p) => p - 1)}
           >
             Prev
           </Button>
@@ -196,13 +183,12 @@ const Party = () => {
             size="sm"
             variant="outline"
             disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage((prev) => prev + 1)}
+            onClick={() => setCurrentPage((p) => p + 1)}
           >
             Next
           </Button>
         </div>
       )}
-
     </div>
   );
 };

@@ -35,9 +35,7 @@ const WareHouse = () => {
     onValue(warehouseRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
-        const array = Object.keys(data)
-          .filter((key) => !data[key].entries)
-          .map((id) => ({ id, ...data[id] }));
+        const array = Object.keys(data).map((id) => ({ id, ...data[id] }));
         setWarehouses(array);
       } else {
         setWarehouses([]);
@@ -65,24 +63,27 @@ const WareHouse = () => {
     });
   }, []);
 
-  /* ---------- Load Transfer Records ---------- */
+  /* ---------- Load Transfer Records from wentry ---------- */
   useEffect(() => {
-    const warehouseRef = ref(db, "warehouse");
-    onValue(warehouseRef, (snapshot) => {
+    const wentryRef = ref(db, "wentry");
+    onValue(wentryRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
         let records = [];
-        Object.values(data).forEach((w) => {
-          if (w.entries) {
-            Object.values(w.entries).forEach((entry) => {
-              records.push(entry);
-            });
-          }
+
+        // Iterate over each warehouse
+        Object.entries(data).forEach(([warehouseName, entries]) => {
+          Object.values(entries).forEach((entry) => {
+            records.push({ ...entry, warehouseName });
+          });
         });
+
+        // Sort by createdAt descending
         records.sort((a, b) => b.createdAt - a.createdAt);
-        // Remove duplicates by ID
+
+        // Remove duplicates by ID if present
         const uniqueRecords = Array.from(
-          new Map(records.map((r) => [r.id || r.createdAt, r])).values()
+          new Map(records.map((r) => [r.createdAt, r])).values()
         );
         setTransferRecords(uniqueRecords);
       } else {
@@ -270,7 +271,7 @@ const WareHouse = () => {
                     ) : (
                       paginatedRecords.map((r) => (
                         <tr
-                          key={r.id || r.createdAt}
+                          key={r.createdAt}
                           className="hover:bg-gray-50 text-sm sm:text-base"
                         >
                           <td className="border p-2">{formatDate(r.date)}</td>

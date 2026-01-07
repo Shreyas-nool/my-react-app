@@ -12,7 +12,7 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 
 import { db } from "../../firebase";
-import { ref, onValue, set, push, get } from "firebase/database";
+import { ref, onValue, set, get, push } from "firebase/database";
 
 const TransferStock = () => {
   const navigate = useNavigate();
@@ -28,12 +28,11 @@ const TransferStock = () => {
 
   const [products, setProducts] = useState([]);
 
-  // ---------- Local date in YYYY-MM-DD format ----------
   const todayLocal = new Date();
-  const formattedLocalDate = todayLocal.toLocaleDateString("en-CA"); // YYYY-MM-DD for input
-  const timestampLocal = todayLocal.getTime(); // For DB createdAt
+  const formattedLocalDate = todayLocal.toLocaleDateString("en-CA"); // YYYY-MM-DD
+  const timestampLocal = todayLocal.getTime();
 
-  /* ---------- Load Warehouses ---------- */
+  // ---------- Load Warehouses ----------
   useEffect(() => {
     const warehouseRef = ref(db, "warehouse");
     onValue(warehouseRef, (snapshot) => {
@@ -45,7 +44,7 @@ const TransferStock = () => {
     });
   }, []);
 
-  /* ---------- Load Products based on From Warehouse ---------- */
+  // ---------- Load Products based on From Warehouse ----------
   useEffect(() => {
     if (!fromWarehouse) {
       setProducts([]);
@@ -65,7 +64,7 @@ const TransferStock = () => {
       Object.entries(data).forEach(([date, items]) => {
         Object.entries(items).forEach(([id, item]) => {
           if (item.warehouse === fromWarehouse) {
-            stockList.push(item);
+            stockList.push({ ...item, id });
           }
         });
       });
@@ -74,7 +73,7 @@ const TransferStock = () => {
     });
   }, [fromWarehouse]);
 
-  /* ---------- Handle Category Change ---------- */
+  // ---------- Handle Category Change ----------
   const handleCategoryChange = (cat) => {
     setCategory(cat);
     setProduct("");
@@ -82,14 +81,14 @@ const TransferStock = () => {
     setAvailableBoxes(filtered.length > 0 ? filtered[0].boxes : 0);
   };
 
-  /* ---------- Handle Product Change ---------- */
+  // ---------- Handle Product Change ----------
   const handleProductChange = (prodName) => {
     setProduct(prodName);
     const p = products.find((p) => p.productName === prodName);
     setAvailableBoxes(p ? p.boxes : 0);
   };
 
-  /* ---------- Handle Transfer ---------- */
+  // ---------- Handle Transfer ----------
   const handleTransfer = async () => {
     if (!fromWarehouse || !toWarehouse || !category || !product || !boxes)
       return alert("Fill all fields");
@@ -147,12 +146,11 @@ const TransferStock = () => {
     });
 
     if (!foundTo && fromStock) {
-      // Create new stock in To Warehouse
       const dateKey = formattedLocalDate;
-      const newStockRef = push(ref(db, `stocks/${dateKey}`));
-      await set(newStockRef, {
+      const newStockId = Date.now(); // Numeric unique ID
+      await set(ref(db, `stocks/${dateKey}/${newStockId}`), {
         ...fromStock,
-        id: newStockRef.key,
+        id: newStockId,
         warehouse: toWarehouse,
         boxes: boxesToTransfer,
         totalPieces: boxesToTransfer * fromStock.piecesPerBox,
@@ -160,8 +158,7 @@ const TransferStock = () => {
       });
     }
 
-    // 3️⃣ Create warehouse entries
-    const entryId = Date.now().toString();
+    // 3️⃣ Create warehouse entries in "wentry" node
     const entryData = {
       from: fromWarehouse,
       to: toWarehouse,
@@ -172,8 +169,13 @@ const TransferStock = () => {
       createdAt: timestampLocal,
     };
 
-    await set(ref(db, `warehouse/${fromWarehouse}/entries/${entryId}`), entryData);
-    await set(ref(db, `warehouse/${toWarehouse}/entries/${entryId}`), entryData);
+    const entryIdFrom = Date.now();
+    const entryIdTo = entryIdFrom + 1; // ensure unique numeric IDs
+
+    // From warehouse entry
+    await set(ref(db, `wentry/${fromWarehouse}/${entryIdFrom}`), entryData);
+    // To warehouse entry
+    await set(ref(db, `wentry/${toWarehouse}/${entryIdTo}`), entryData);
 
     alert("✅ Stock transferred successfully!");
 
@@ -216,7 +218,7 @@ const TransferStock = () => {
               <Input type="date" value={formattedLocalDate} readOnly />
             </div>
 
-            {/* From / To */}
+            {/* From / To Warehouses */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>From Warehouse</Label>

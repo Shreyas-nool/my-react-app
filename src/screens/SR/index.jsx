@@ -1,301 +1,303 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
-import { ref, onValue, off, remove, set } from "firebase/database";
-
+import { ref, onValue, off, update } from "firebase/database";
 import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input"; // ✅ Import Input
-import { ArrowLeft, Trash2, Plus } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
-import {
-  Table,
-  TableHeader,
-  TableRow,
-  TableHead,
-  TableBody,
-  TableCell,
-} from "../../components/ui/table";
+const ITEMS_PER_PAGE = 20;
+const BANK_NAME = "SR"; // 🔁 SR / Talha / JR
 
-const SRPurchases = () => {
+const round2 = (n) =>
+  Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+
+const BankLedger = () => {
   const navigate = useNavigate();
 
   const [entries, setEntries] = useState([]);
   const [balance, setBalance] = useState(0);
   const [fromDate, setFromDate] = useState(null);
   const [toDate, setToDate] = useState(null);
-
-  const [testAdd, setTestAdd] = useState(""); // ✅ Test add money input
-
-  const BANK_NAME = "SR";
-
-  const formatAmount = (num) => Number(num).toFixed(2);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const paymentsRef = ref(db, `payments/account/${BANK_NAME}`);
-    const expenseRef = ref(db, "expenses"); // GLOBAL EXPENSES NODE
-    const transferRef = ref(db, "transfers");
-    const srBalanceRef = ref(db, `accounts/${BANK_NAME}/balance`);
+    setLoading(true);
 
-    let allPayments = {};
-    let allExpenses = {};
-    let allTransfers = {};
+    const purchaseRef = ref(db, `phurchase/${BANK_NAME}`);
+    const paymentRef = ref(db, "payments");
+    const expenseRef = ref(db, "expenses");
 
-    const updateEntries = () => {
-      let temp = [];
-      let bal = 0;
-      const seenKeys = new Set();
+    const rebuildLedger = async () => {
+      const temp = [];
+      const seen = new Set();
 
-      // ----------------- PAYMENTS -----------------
-      Object.entries(allPayments || {}).forEach(([date, items]) => {
-        Object.entries(items || {}).forEach(([txnId, p]) => {
-          if (!p || !p.txnId || seenKeys.has(p.txnId)) return;
-          seenKeys.add(p.txnId);
+      /* ---------------- PURCHASES ---------------- */
+      const purchasesSnap = await new Promise((res) =>
+        onValue(purchaseRef, res, { onlyOnce: true })
+      );
+      const purchases = purchasesSnap.val() || {};
 
-          const amt = Number(p.amount || 0);
-          if (p.toType === "account" && p.toName === BANK_NAME) bal += amt;
-          if (p.fromType === "account" && p.fromName === BANK_NAME) bal -= amt;
+      Object.entries(purchases).forEach(([date, items]) => {
+        Object.entries(items || {}).forEach(([id, p]) => {
+          if (seen.has(id)) return;
+          seen.add(id);
+
+          const amt = Number(p.amount || p.amountINR || 0);
 
           temp.push({
-            key: p.txnId,
-            path: `payments/account/${BANK_NAME}/${date}/${txnId}`,
             date: p.date || date,
-            type: "Payment",
-            amount: amt,
-            notes: p.note || "-",
-            from: p.fromName || "-",
+            type: "Purchase",
+            amount: -amt,
+            notes: p.notes || "-",
+            source: "-",
           });
         });
       });
 
-      // ----------------- EXPENSES -----------------
-      Object.entries(allExpenses || {}).forEach(([category, entities]) => {
-        Object.entries(entities || {}).forEach(([entityName, items]) => {
-          if (entityName !== BANK_NAME) return;
-          Object.entries(items || {}).forEach(([id, exp]) => {
-            if (!exp || seenKeys.has(id)) return;
-            seenKeys.add(id);
+      /* ---------------- PAYMENTS ---------------- */
+      const paymentsSnap = await new Promise((res) =>
+        onValue(paymentRef, res, { onlyOnce: true })
+      );
+      const payments = paymentsSnap.val() || {};
 
-            const amt = Number(exp.amount || 0);
-            bal -= amt;
+      Object.entries(payments).forEach(([type, names]) => {
+        Object.entries(names || {}).forEach(([name, dates]) => {
+          Object.entries(dates || {}).forEach(([date, txns]) => {
+            Object.entries(txns || {}).forEach(([txnId, p]) => {
+              if (!p?.txnId || seen.has(p.txnId)) return;
+
+              const isBank =
+                (p.fromType === "account" && p.fromName === BANK_NAME) ||
+                (p.toType === "account" && p.toName === BANK_NAME);
+
+              if (!isBank) return;
+              seen.add(p.txnId);
+
+              const amt = Number(p.amount || 0);
+              const signed =
+                p.toName === BANK_NAME ? amt : -amt;
+
+              temp.push({
+                date: p.date || date,
+                type: "Payment",
+                amount: signed,
+                notes: p.note || "-",
+                source:
+                  signed > 0
+                    ? `from ${p.fromName}`
+                    : `to ${p.toName}`,
+              });
+            });
+          });
+        });
+      });
+
+      /* ---------------- EXPENSES ---------------- */
+      const expensesSnap = await new Promise((res) =>
+        onValue(expenseRef, res, { onlyOnce: true })
+      );
+      const expenses = expensesSnap.val() || {};
+
+      Object.entries(expenses).forEach(([cat, entities]) => {
+        Object.entries(entities || {}).forEach(([entity, items]) => {
+          if (entity !== BANK_NAME) return;
+
+          Object.entries(items || {}).forEach(([id, e]) => {
+            if (seen.has(id)) return;
+            seen.add(id);
+
+            const amt = Number(e.amount || 0);
 
             temp.push({
-              key: id,
-              path: `expenses/${category}/${entityName}/${id}`,
-              date: exp.date || new Date().toISOString(),
+              date: e.date || new Date().toISOString(),
               type: "Expense",
-              amount: amt,
-              notes: exp.expenseFor || "-",
-              from: entityName,
+              amount: -amt,
+              notes: e.expenseFor || "-",
+              source: entity,
             });
           });
         });
       });
 
-      // ----------------- TRANSFERS -----------------
-      Object.entries(allTransfers || {}).forEach(([type, names]) => {
-        Object.entries(names || {}).forEach(([name, dates]) => {
-          Object.entries(dates || {}).forEach(([date, items]) => {
-            Object.entries(items || {}).forEach(([key, t]) => {
-              if (!t || seenKeys.has(key)) return;
+      /* ---------------- SORT + RUNNING BALANCE ---------------- */
+      temp.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-              const amt = Number(t.amount || 0);
-
-              if (t.from === BANK_NAME) {
-                bal -= amt;
-                temp.push({
-                  key,
-                  path: `transfers/${type}/${name}/${date}/${key}`,
-                  date: t.date || date,
-                  type: "Transfer",
-                  amount: amt,
-                  notes: t.note || "-",
-                  from: `${t.from} → ${t.toName || name}`,
-                });
-                seenKeys.add(key);
-              } else if (t.toName === BANK_NAME) {
-                bal += amt;
-                temp.push({
-                  key,
-                  path: `transfers/${type}/${name}/${date}/${key}`,
-                  date: t.date || date,
-                  type: "Transfer",
-                  amount: amt,
-                  notes: t.note || "-",
-                  from: t.from || "-",
-                });
-                seenKeys.add(key);
-              }
-            });
-          });
-        });
+      let rb = 0;
+      const final = temp.map((e) => {
+        rb += e.amount;
+        return { ...e, runningBalance: round2(rb) };
       });
 
-      temp.sort((a, b) => new Date(b.date) - new Date(a.date));
+      const finalBalance = round2(rb);
 
-      setEntries(temp);
-      setBalance(Math.round((bal + Number.EPSILON) * 100) / 100);
+      setEntries(final);
+      setBalance(finalBalance);
 
-      // Update SR balance in DB
-      set(srBalanceRef, Math.round((bal + Number.EPSILON) * 100) / 100);
+      /* ✅ AUTO-SYNC BALANCE TO ACCOUNTS */
+      await update(ref(db, `accounts/${BANK_NAME}`), {
+        balance: finalBalance,
+        updatedAt: new Date().toISOString(),
+      });
+
+      const lastPage =
+        Math.ceil(final.length / ITEMS_PER_PAGE) || 1;
+      setCurrentPage(lastPage);
+      setLoading(false);
     };
 
-    const unsubPayments = onValue(paymentsRef, (snap) => {
-      allPayments = snap.val() || {};
-      updateEntries();
-    });
+    rebuildLedger();
 
-    const unsubExpenses = onValue(expenseRef, (snap) => {
-      allExpenses = snap.val() || {};
-      updateEntries();
-    });
-
-    const unsubTransfers = onValue(transferRef, (snap) => {
-      allTransfers = snap.val() || {};
-      updateEntries();
-    });
+    const u1 = onValue(purchaseRef, rebuildLedger);
+    const u2 = onValue(paymentRef, rebuildLedger);
+    const u3 = onValue(expenseRef, rebuildLedger);
 
     return () => {
-      off(paymentsRef);
-      off(expenseRef);
-      off(transferRef);
+      off(purchaseRef, "value", u1);
+      off(paymentRef, "value", u2);
+      off(expenseRef, "value", u3);
     };
   }, []);
 
-  const handleDelete = async (path) => {
-    if (!window.confirm("Delete this entry?")) return;
-    await remove(ref(db, path));
-  };
+  /* ---------------- FILTER ---------------- */
+  const filtered = useMemo(() => {
+    return entries.filter((e) => {
+      const d = new Date(e.date);
+      if (fromDate && d < fromDate) return false;
+      if (toDate && d > toDate) return false;
+      return true;
+    });
+  }, [entries, fromDate, toDate]);
 
-  const filtered = entries.filter((e) => {
-    const d = new Date(e.date);
-    if (fromDate && d < fromDate) return false;
-    if (toDate && d > toDate) return false;
-    return true;
-  });
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const pageData = filtered.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  if (loading) return <div className="p-4">Loading...</div>;
 
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
       {/* HEADER */}
-      <div className="flex justify-between items-center border-b pb-2">
-        <Button variant="ghost" onClick={() => navigate("/")}>
-          <ArrowLeft />
-        </Button>
-
-        <h1 className="text-lg font-semibold">{BANK_NAME}</h1>
-
+      <div className="flex items-center gap-2 border-b pb-2">
         <Button
-          className="bg-black text-white"
-          onClick={() => navigate("/sr/transfer-money")}
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate(-1)}
+          className="h-9 w-9 p-0"
         >
-          <Plus className="h-4 w-4 mr-1" />
-          Transfer Money
+          <ArrowLeft className="h-4 w-4" />
         </Button>
+
+        <DatePicker
+          selected={fromDate}
+          onChange={setFromDate}
+          placeholderText="From"
+          isClearable
+          className="border px-2 py-1 text-sm rounded"
+        />
+        <DatePicker
+          selected={toDate}
+          onChange={setToDate}
+          placeholderText="To"
+          isClearable
+          className="border px-2 py-1 text-sm rounded"
+        />
       </div>
 
-      {/* BALANCE & TEST INPUT */}
-      <div className="bg-white p-5 rounded-xl shadow border flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-        <h2 className="text-xl font-bold">
-          Balance: ₹{formatAmount(balance)}
-        </h2>
-
-        <div className="flex gap-2 items-center flex-wrap">
-          {/* Test add money input */}
-          <Input
-            type="number"
-            placeholder="Add money (test)"
-            value={testAdd}
-            onChange={(e) => setTestAdd(e.target.value)}
-            className="w-40"
-          />
-          <Button
-            className="bg-green-600 text-white"
-            onClick={() => {
-              const amt = Number(testAdd);
-              if (!amt) return;
-              const newBal = Math.round((balance + amt + Number.EPSILON) * 100) / 100;
-              setBalance(newBal);
-              set(ref(db, `accounts/${BANK_NAME}/balance`), newBal);
-              setTestAdd("");
-            }}
-          >
-            Add
-          </Button>
-
-          <DatePicker
-            selected={fromDate}
-            onChange={setFromDate}
-            isClearable
-            placeholderText="From"
-            className="border p-2 rounded"
-          />
-          <DatePicker
-            selected={toDate}
-            onChange={setToDate}
-            isClearable
-            placeholderText="To"
-            className="border p-2 rounded"
-          />
-        </div>
+      {/* BANK NAME */}
+      <div className="text-center">
+        <h2 className="text-xl font-semibold">{BANK_NAME}</h2>
       </div>
 
       {/* TABLE */}
-      <div className="bg-white rounded-xl shadow border p-4 overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Amount</TableHead>
-              <TableHead>Notes</TableHead>
-              <TableHead>From</TableHead>
-              <TableHead>Action</TableHead>
-            </TableRow>
-          </TableHeader>
-
-          <TableBody>
-            {filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center">
-                  No records found
-                </TableCell>
-              </TableRow>
+      <div className="overflow-x-auto border rounded shadow bg-white">
+        <table className="w-full text-center border-collapse">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="border p-3">Date</th>
+              <th className="border p-3">Type</th>
+              <th className="border p-3">Amount</th>
+              <th className="border p-3">Notes</th>
+              <th className="border p-3">Source</th>
+              <th className="border p-3">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pageData.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-6">No entries</td>
+              </tr>
             ) : (
-              filtered.map((e) => (
-                <TableRow key={e.key}>
-                  <TableCell>
+              pageData.map((e, i) => (
+                <tr key={i}>
+                  <td className="border p-3">
                     {new Date(e.date).toLocaleDateString("en-GB")}
-                  </TableCell>
-                  <TableCell>{e.type}</TableCell>
-                  <TableCell
-                    className={
-                      e.type === "Expense" || e.type === "Transfer"
-                        ? "text-red-600 font-semibold"
-                        : "text-green-600 font-semibold"
-                    }
+                  </td>
+                  <td className="border p-3">{e.type}</td>
+                  <td
+                    className={`border p-3 font-semibold ${
+                      e.amount >= 0 ? "text-green-600" : "text-red-600"
+                    }`}
                   >
-                    ₹{formatAmount(e.amount)}
-                  </TableCell>
-                  <TableCell>{e.notes}</TableCell>
-                  <TableCell>{e.from}</TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      className="text-red-600"
-                      onClick={() => handleDelete(e.path)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                    {Math.abs(e.amount).toFixed(2)}
+                  </td>
+                  <td className="border p-3">{e.notes}</td>
+                  <td className="border p-3">{e.source}</td>
+                  <td
+                    className={`border p-3 font-semibold ${
+                      e.runningBalance >= 0
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {e.runningBalance.toFixed(2)}
+                  </td>
+                </tr>
               ))
             )}
-          </TableBody>
-        </Table>
+
+            <tr className="bg-gray-100 font-bold">
+              <td colSpan={5} className="border p-3 text-right">
+                Current Balance
+              </td>
+              <td
+                className={`border p-3 ${
+                  balance >= 0 ? "text-green-600" : "text-red-600"
+                }`}
+              >
+                {balance.toFixed(2)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* PAGINATION */}
+      <div className="fixed bottom-0 left-0 w-full bg-white border-t p-4 flex justify-center gap-2">
+        <Button
+          size="sm"
+          disabled={currentPage === 1}
+          onClick={() => setCurrentPage((p) => p - 1)}
+        >
+          Prev
+        </Button>
+        <span>
+          Page {currentPage} of {totalPages || 1}
+        </span>
+        <Button
+          size="sm"
+          disabled={currentPage === totalPages}
+          onClick={() => setCurrentPage((p) => p + 1)}
+        >
+          Next
+        </Button>
       </div>
     </div>
   );
 };
 
-export default SRPurchases;
+export default BankLedger;

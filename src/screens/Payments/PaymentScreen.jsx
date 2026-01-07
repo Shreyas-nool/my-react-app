@@ -128,6 +128,7 @@ const PaymentScreen = () => {
           placeholderText="Select date"
           className="border border-gray-400 rounded px-3 py-2"
           isClearable
+          dateFormat="dd / MM / yyyy"
         />
 
         <input

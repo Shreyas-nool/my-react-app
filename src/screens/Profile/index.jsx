@@ -73,7 +73,7 @@ const ProfileScreen = () => {
       await set(accountRef, {
         name: accountName,
         type: "account",
-        balance: 500,
+        balance: 0,
         createdAt: new Date().toISOString(),
         entries: {
           expenses: {},

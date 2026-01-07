@@ -7,13 +7,13 @@ import { ArrowLeft } from "lucide-react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
-const BANK_NAME = "Talha";
 const ITEMS_PER_PAGE = 20;
+const BANK_NAME = "Mumbai Payment";
 
 const round2 = (n) =>
   Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
-const TalhaPurchasesLedger = () => {
+const BankLedger = () => {
   const navigate = useNavigate();
 
   const [entries, setEntries] = useState([]);
@@ -24,13 +24,13 @@ const TalhaPurchasesLedger = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
+
     const purchaseRef = ref(db, `phurchase/${BANK_NAME}`);
     const paymentRef = ref(db, "payments");
     const expenseRef = ref(db, "expenses");
 
     const rebuildLedger = async () => {
-      setLoading(true);
-
       const temp = [];
       const seen = new Set();
 
@@ -63,17 +63,17 @@ const TalhaPurchasesLedger = () => {
       );
       const payments = paymentsSnap.val() || {};
 
-      Object.entries(payments).forEach(([_, names]) => {
-        Object.entries(names || {}).forEach(([__, dates]) => {
+      Object.entries(payments).forEach(([type, names]) => {
+        Object.entries(names || {}).forEach(([name, dates]) => {
           Object.entries(dates || {}).forEach(([date, txns]) => {
             Object.entries(txns || {}).forEach(([txnId, p]) => {
               if (!p?.txnId || seen.has(p.txnId)) return;
 
-              const isTalha =
+              const isBank =
                 (p.fromType === "account" && p.fromName === BANK_NAME) ||
                 (p.toType === "account" && p.toName === BANK_NAME);
 
-              if (!isTalha) return;
+              if (!isBank) return;
               seen.add(p.txnId);
 
               const amt = Number(p.amount || 0);
@@ -101,7 +101,7 @@ const TalhaPurchasesLedger = () => {
       );
       const expenses = expensesSnap.val() || {};
 
-      Object.entries(expenses).forEach(([_, entities]) => {
+      Object.entries(expenses).forEach(([cat, entities]) => {
         Object.entries(entities || {}).forEach(([entity, items]) => {
           if (entity !== BANK_NAME) return;
 
@@ -126,24 +126,23 @@ const TalhaPurchasesLedger = () => {
       temp.sort((a, b) => new Date(a.date) - new Date(b.date));
 
       let rb = 0;
-      const finalEntries = temp.map((e) => {
+      const final = temp.map((e) => {
         rb += e.amount;
         return { ...e, runningBalance: round2(rb) };
       });
 
       const finalBalance = round2(rb);
 
-      setEntries(finalEntries);
+      setEntries(final);
       setBalance(finalBalance);
 
-      /* ✅ LIVE AUTO-SYNC BALANCE TO DB */
+      /* ✅ AUTO SYNC BALANCE (SINGLE SOURCE OF TRUTH) */
       await update(ref(db, `accounts/${BANK_NAME}`), {
         balance: finalBalance,
         updatedAt: new Date().toISOString(),
       });
 
-      const lastPage =
-        Math.ceil(finalEntries.length / ITEMS_PER_PAGE) || 1;
+      const lastPage = Math.ceil(final.length / ITEMS_PER_PAGE) || 1;
       setCurrentPage(lastPage);
       setLoading(false);
     };
@@ -208,10 +207,12 @@ const TalhaPurchasesLedger = () => {
         />
       </div>
 
-      <h2 className="text-xl font-semibold text-center">
-        {BANK_NAME}
-      </h2>
+      {/* BANK NAME */}
+      <div className="text-center">
+        <h2 className="text-xl font-semibold">{BANK_NAME}</h2>
+      </div>
 
+      {/* TABLE */}
       <div className="overflow-x-auto border rounded shadow bg-white">
         <table className="w-full text-center border-collapse">
           <thead className="bg-gray-100">
@@ -225,32 +226,38 @@ const TalhaPurchasesLedger = () => {
             </tr>
           </thead>
           <tbody>
-            {pageData.map((e, i) => (
-              <tr key={i}>
-                <td className="border p-3">
-                  {new Date(e.date).toLocaleDateString("en-GB")}
-                </td>
-                <td className="border p-3">{e.type}</td>
-                <td
-                  className={`border p-3 font-semibold ${
-                    e.amount >= 0 ? "text-green-600" : "text-red-600"
-                  }`}
-                >
-                  {Math.abs(e.amount).toFixed(2)}
-                </td>
-                <td className="border p-3">{e.notes}</td>
-                <td className="border p-3">{e.source}</td>
-                <td
-                  className={`border p-3 font-semibold ${
-                    e.runningBalance >= 0
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }`}
-                >
-                  {e.runningBalance.toFixed(2)}
-                </td>
+            {pageData.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-6">No entries</td>
               </tr>
-            ))}
+            ) : (
+              pageData.map((e, i) => (
+                <tr key={i}>
+                  <td className="border p-3">
+                    {new Date(e.date).toLocaleDateString("en-GB")}
+                  </td>
+                  <td className="border p-3">{e.type}</td>
+                  <td
+                    className={`border p-3 font-semibold ${
+                      e.amount >= 0 ? "text-green-600" : "text-red-600"
+                    }`}
+                  >
+                    {Math.abs(e.amount).toFixed(2)}
+                  </td>
+                  <td className="border p-3">{e.notes}</td>
+                  <td className="border p-3">{e.source}</td>
+                  <td
+                    className={`border p-3 font-semibold ${
+                      e.runningBalance >= 0
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {e.runningBalance.toFixed(2)}
+                  </td>
+                </tr>
+              ))
+            )}
 
             <tr className="bg-gray-100 font-bold">
               <td colSpan={5} className="border p-3 text-right">
@@ -267,8 +274,29 @@ const TalhaPurchasesLedger = () => {
           </tbody>
         </table>
       </div>
+
+      {/* PAGINATION */}
+      <div className="fixed bottom-0 left-0 w-full bg-white border-t p-4 flex justify-center gap-2">
+        <Button
+          size="sm"
+          disabled={currentPage === 1}
+          onClick={() => setCurrentPage((p) => p - 1)}
+        >
+          Prev
+        </Button>
+        <span>
+          Page {currentPage} of {totalPages || 1}
+        </span>
+        <Button
+          size="sm"
+          disabled={currentPage === totalPages}
+          onClick={() => setCurrentPage((p) => p + 1)}
+        >
+          Next
+        </Button>
+      </div>
     </div>
   );
 };
 
-export default TalhaPurchasesLedger;
+export default BankLedger;

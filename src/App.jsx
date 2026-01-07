@@ -60,6 +60,9 @@ import SrTransferMoney from "./screens/SR/SrTransferMoney";
 
 import BankDetails from "./screens/Bank/Bankdetails";
 
+import MumbaiPayment from "./screens/MumbaiPayment";
+import MaladPayment from "./screens/MaladPayment"
+
 // ✅ FULLY FIXED ROUTER
 const router = createBrowserRouter([
   {
@@ -153,6 +156,12 @@ const router = createBrowserRouter([
 
           //Due date
           { path: "/duedate", element: <DueDateScreen />},
+
+          //Mumbai Payment
+          {path:"/mumbaipayment", element:<MumbaiPayment />},
+
+          //Malad Payment
+          {path:"/maladpayment", element:<MaladPayment />},
 
         ],
       },

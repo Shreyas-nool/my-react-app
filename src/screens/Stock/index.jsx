@@ -198,13 +198,13 @@ const StockScreen = () => {
               >
                 Date {renderSortIcon("date")}
               </th>
+              <th className="border p-2">Category</th>
               <th
                 className="border p-2 cursor-pointer"
                 onClick={() => handleSort("productName")}
               >
                 Product {renderSortIcon("productName")}
               </th>
-              <th className="border p-2">Category</th>
               <th className="border p-2">Boxes</th>
               <th className="border p-2">Pcs/Box</th>
               <th className="border p-2">Warehouse</th>
@@ -223,8 +223,8 @@ const StockScreen = () => {
               sortedStock.map((item) => (
                 <tr key={item._firebaseId} className="hover:bg-gray-50">
                   <td className="border p-2">{formatDate(item.date)}</td>
-                  <td className="border p-2">{item.productName}</td>
                   <td className="border p-2">{item.category}</td>
+                  <td className="border p-2">{item.productName}</td>
                   <td className="border p-2">{item.boxes}</td>
                   <td className="border p-2">{item.piecesPerBox}</td>
                   <td className="border p-2">{item.warehouse || "-"}</td>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 
@@ -43,6 +43,7 @@ const AddStockScreen = () => {
   const navigate = useNavigate();
 
   const [products, setProducts] = useState([]);
+  const [filteredProducts, setFilteredProducts] = useState([]);
   const [productOpen, setProductOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
 
@@ -53,6 +54,7 @@ const AddStockScreen = () => {
 
   const [warehouse, setWarehouse] = useState("");
   const [warehouses, setWarehouses] = useState([]);
+  const [categories, setCategories] = useState([]);
 
   // FETCH PRODUCTS
   useEffect(() => {
@@ -64,6 +66,10 @@ const AddStockScreen = () => {
         ...data[id],
       }));
       setProducts(list);
+
+      // Extract unique categories
+      const cats = [...new Set(list.map((p) => p.category))];
+      setCategories(cats);
     });
   }, []);
 
@@ -81,18 +87,30 @@ const AddStockScreen = () => {
     });
   }, []);
 
+  // FILTER PRODUCTS BASED ON CATEGORY
+  useEffect(() => {
+    if (category) {
+      setFilteredProducts(products.filter((p) => p.category === category));
+      setSelectedProduct(null); // reset selected product
+      setPiecesPerBox("");
+      setPricePerPiece("");
+      setBoxes("");
+    } else {
+      setFilteredProducts([]);
+    }
+  }, [category, products]);
+
   const handleSelectProduct = (prod) => {
     setSelectedProduct(prod);
     setProductOpen(false);
 
-    setCategory(prod.category || "");
     setPiecesPerBox(prod.piecesPerBox || 0);
-    setBoxes("");
     setPricePerPiece(prod.pricePerPiece || prod.price || "");
+    setBoxes("");
   };
 
   const handleSaveStock = async () => {
-    if (!selectedProduct || !boxes || !pricePerPiece || !warehouse) {
+    if (!category || !selectedProduct || !boxes || !pricePerPiece || !warehouse) {
       return alert("Please fill all fields.");
     }
 
@@ -213,7 +231,24 @@ const AddStockScreen = () => {
         </CardHeader>
 
         <CardContent className="space-y-5">
-          {/* PRODUCT SELECT */}
+          {/* CATEGORY FIRST */}
+          <div className="space-y-1">
+            <Label>Category</Label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="border w-full h-10 rounded-md px-3"
+            >
+              <option value="">Select Category</option>
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* PRODUCT */}
           <div className="flex flex-col gap-1">
             <Label className="text-sm">Product</Label>
             <Popover open={productOpen} onOpenChange={setProductOpen}>
@@ -221,6 +256,7 @@ const AddStockScreen = () => {
                 <Button
                   variant="outline"
                   className="w-full justify-between px-3 font-normal"
+                  disabled={!category} // disable if no category
                 >
                   {selectedProduct
                     ? selectedProduct.productName
@@ -233,7 +269,7 @@ const AddStockScreen = () => {
                   <CommandInput placeholder="Search product..." />
                   <CommandList>
                     <CommandEmpty>No products found.</CommandEmpty>
-                    {products.map((prod) => (
+                    {filteredProducts.map((prod) => (
                       <CommandItem
                         key={prod.id}
                         value={prod.productName}
@@ -254,12 +290,6 @@ const AddStockScreen = () => {
                 </Command>
               </PopoverContent>
             </Popover>
-          </div>
-
-          {/* CATEGORY */}
-          <div className="space-y-1">
-            <Label>Category</Label>
-            <Input type="text" value={category} disabled className="bg-muted/40" />
           </div>
 
           {/* PIECES PER BOX */}

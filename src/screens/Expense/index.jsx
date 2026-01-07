@@ -2,20 +2,6 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import {
-  Table,
-  TableHeader,
-  TableRow,
-  TableHead,
-  TableBody,
-  TableCell,
-} from "../../components/ui/table";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from "../../components/ui/card";
 import { db } from "../../firebase";
 import { ref, onValue, remove } from "firebase/database";
 import DatePicker from "react-datepicker";
@@ -30,9 +16,7 @@ const ExpenseScreen = () => {
   const [toDate, setToDate] = useState(null);
   const [total, setTotal] = useState(0);
 
-  // ----------------------------------
-  // FETCH EXPENSES FROM GLOBAL "expenses" NODE ONLY
-  // ----------------------------------
+  /* ---------------- FETCH EXPENSES ---------------- */
   useEffect(() => {
     const expRef = ref(db, "expenses");
 
@@ -40,13 +24,14 @@ const ExpenseScreen = () => {
       const data = snapshot.val() || {};
       let all = [];
 
-      // Loop by category -> entity -> expenseID
       Object.entries(data).forEach(([category, entities]) => {
-        Object.entries(entities).forEach(([entityName, items]) => {
-          Object.entries(items).forEach(([id, exp]) => {
+        Object.entries(entities || {}).forEach(([entity, items]) => {
+          Object.entries(items || {}).forEach(([id, exp]) => {
             all.push({
               ...exp,
-              _path: `expenses/${category}/${entityName}/${id}`,
+              category,
+              entity,
+              _path: `expenses/${category}/${entity}/${id}`,
             });
           });
         });
@@ -58,17 +43,15 @@ const ExpenseScreen = () => {
     });
   }, []);
 
-  // ----------------------------------
-  // DATE FILTER
-  // ----------------------------------
+  /* ---------------- DATE FILTER ---------------- */
   useEffect(() => {
     let data = [...expenses];
 
     if (fromDate)
-      data = data.filter((e) => new Date(e.date) >= new Date(fromDate));
+      data = data.filter((e) => new Date(e.date) >= fromDate);
 
     if (toDate)
-      data = data.filter((e) => new Date(e.date) <= new Date(toDate));
+      data = data.filter((e) => new Date(e.date) <= toDate);
 
     setFiltered(data);
 
@@ -76,123 +59,106 @@ const ExpenseScreen = () => {
     setTotal(sum);
   }, [fromDate, toDate, expenses]);
 
-  // ----------------------------------
-  // DELETE EXPENSE
-  // ----------------------------------
+  /* ---------------- DELETE ---------------- */
   const handleDelete = async (exp) => {
     if (!window.confirm("Delete this expense?")) return;
-
     await remove(ref(db, exp._path));
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 mt-6">
+    <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
 
       {/* HEADER */}
-      <div className="flex justify-between items-center mb-4">
-        <Button variant="ghost" onClick={() => navigate("/")}>
-          <ArrowLeft />
-        </Button>
-        <h1 className="text-lg font-semibold">Expenses</h1>
-        <Button onClick={() => navigate("/expense/create-expense")}>
+      <div className="relative flex items-center border-b pb-2">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate("/")}
+            className="h-9 w-9 p-0"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+
+          <DatePicker
+            selected={fromDate}
+            onChange={setFromDate}
+            placeholderText="From"
+            className="border rounded px-2 py-1 text-sm"
+            isClearable
+          />
+          <DatePicker
+            selected={toDate}
+            onChange={setToDate}
+            placeholderText="To"
+            className="border rounded px-2 py-1 text-sm"
+            isClearable
+          />
+        </div>
+
+        <Button
+          className="absolute right-0 top-1/2 -translate-y-1/2 h-9 text-sm"
+          onClick={() => navigate("/expense/create-expense")}
+        >
           Add Expense
         </Button>
       </div>
 
-      {/* SUMMARY CARD */}
-      <Card className="mb-3">
-        <CardContent className="flex flex-wrap items-center justify-between gap-3 py-2 px-3">
-
-          {/* TOTAL */}
-          <div>
-            <p className="text-[11px] text-muted-foreground leading-none">
-              Total Expense
-            </p>
-            <p className="text-lg font-semibold text-red-600 leading-tight">
-              ₹{total.toFixed(2)}
-            </p>
-          </div>
-
-          {/* DATE FILTER */}
-          <div className="flex gap-2">
-            <DatePicker
-              selected={fromDate}
-              onChange={(d) => setFromDate(d)}
-              placeholderText="From"
-              className="border px-2 py-1 rounded text-sm w-[110px]"
-            />
-            <DatePicker
-              selected={toDate}
-              onChange={(d) => setToDate(d)}
-              placeholderText="To"
-              className="border px-2 py-1 rounded text-sm w-[110px]"
-            />
-          </div>
-
-        </CardContent>
-      </Card>
+      {/* TITLE + TOTAL */}
+      <div className="w-full text-center space-y-1">
+        <h2 className="text-xl font-semibold">Expenses</h2>
+        <p className="text-red-600 font-semibold">
+          Total: ₹{total.toFixed(2)}
+        </p>
+      </div>
 
       {/* TABLE */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Expense List</CardTitle>
-        </CardHeader>
+      <div className="overflow-x-auto border rounded shadow bg-white">
+        <table className="w-full text-center border-collapse">
+          <thead>
+            <tr className="bg-gray-100 text-lg">
+              <th className="border p-3">Date</th>
+              <th className="border p-3">Amount</th>
+              <th className="border p-3">Expense For</th>
+              <th className="border p-3">Category</th>
+              <th className="border p-3">Done From</th>
+              <th className="border p-3">Action</th>
+            </tr>
+          </thead>
 
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-center">Date</TableHead>
-                  <TableHead className="text-center">Amount</TableHead>
-                  <TableHead className="text-center">Expense For</TableHead>
-                  <TableHead className="text-center">Type</TableHead>
-                  <TableHead className="text-center">Done From</TableHead>
-                  <TableHead className="text-center">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-
-              <TableBody>
-                {filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-6">
-                      No records found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filtered.map((exp, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="text-center">
-                        {new Date(exp.date).toLocaleDateString("en-GB")}
-                      </TableCell>
-                      <TableCell className="text-center font-medium">
-                        ₹{Number(exp.amount).toFixed(2)}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {exp.expenseFor}
-                      </TableCell>
-                      <TableCell className="text-center capitalize">
-                        {exp.category}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {exp.entity}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <button
-                          onClick={() => handleDelete(exp)}
-                          className="text-red-600 hover:bg-red-100 p-2 rounded-full"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-6">
+                  No records found
+                </td>
+              </tr>
+            ) : (
+              filtered.map((exp, i) => (
+                <tr key={i} className="hover:bg-gray-50">
+                  <td className="border p-3">
+                    {new Date(exp.date).toLocaleDateString("en-GB")}
+                  </td>
+                  <td className="border p-3 font-semibold text-red-600">
+                    ₹{Number(exp.amount).toFixed(2)}
+                  </td>
+                  <td className="border p-3">{exp.expenseFor}</td>
+                  <td className="border p-3 capitalize">{exp.category}</td>
+                  <td className="border p-3">{exp.entity}</td>
+                  <td className="border p-3">
+                    <button
+                      onClick={() => handleDelete(exp)}
+                      className="text-red-600 hover:bg-red-100 p-2 rounded-full"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

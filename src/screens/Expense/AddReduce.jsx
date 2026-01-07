@@ -146,7 +146,12 @@ export default function AddExpense() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label>Date</Label>
-              <DatePicker selected={date} onChange={setDate} className="w-full border p-2 rounded" />
+              <DatePicker
+                selected={date}
+                onChange={setDate}
+                dateFormat="dd / MM / yyyy"
+                className="w-full border p-2 rounded"
+              />
             </div>
 
             <div>

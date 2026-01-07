@@ -130,8 +130,8 @@ export default function BanksLedger() {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full table-auto border border-gray-300 text-center">
+      <div className="overflow-x-auto flex items-center justify-center">
+        <table className="w-200 table-auto border border-gray-300 text-center">
           <thead>
             <tr className="bg-gray-100 text-base">
               <th
