@@ -25,12 +25,10 @@ const formatToISO = (dateObj) => {
 
 // Round to 2 decimals safely
 const round2 = (num) => Math.round((Number(num) + Number.EPSILON) * 100) / 100;
-
 const formatPrice = (value) => {
   const v = Number(value || 0);
   return v !== 0 && v < 0.01 ? v.toFixed(4) : v.toFixed(2);
 };
-
 
 const SalesInvoice = () => {
   const navigate = useNavigate();
@@ -39,12 +37,14 @@ const SalesInvoice = () => {
 
   const [stocks, setStocks] = useState([]);
   const [parties, setParties] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
   const [selectedPartyId, setSelectedPartyId] = useState("");
   const [partyOpen, setPartyOpen] = useState(false);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
+  const [warehouseOpen, setWarehouseOpen] = useState(false);
 
   const [selectedCategory, setSelectedCategory] = useState("");
   const [categoryOpen, setCategoryOpen] = useState(false);
-
   const [selectedStock, setSelectedStock] = useState(null);
   const [productOpen, setProductOpen] = useState(false);
 
@@ -57,13 +57,12 @@ const SalesInvoice = () => {
   const [searchText, setSearchText] = useState("");
   const [stockWarning, setStockWarning] = useState("");
 
-  // Fetch stocks & parties live
+  // Fetch stocks, parties & warehouses live
   useEffect(() => {
     const stocksRef = ref(db, "stocks");
     onValue(stocksRef, (snapshot) => {
       const data = snapshot.val();
       if (!data) return setStocks([]);
-
       const stockItems = [];
       Object.entries(data).forEach(([dateKey, dateGroup]) => {
         Object.entries(dateGroup).forEach(([id, stock]) => {
@@ -77,16 +76,27 @@ const SalesInvoice = () => {
     onValue(partiesRef, (snapshot) => {
       const data = snapshot.val();
       if (!data) return setParties([]);
+      setParties(Object.entries(data).map(([id, details]) => ({ id, ...details })));
+    });
 
-      const list = Object.entries(data).map(([id, details]) => ({
-        id,
-        ...details,
-      }));
-
-      setParties(list);
+    // Line 63-70 (replace the previous warehouse fetch)
+    const warehousesRef = ref(db, "warehouse"); // ✅ correct path
+    onValue(warehousesRef, (snapshot) => {
+      const data = snapshot.val();
+      if (!data) return setWarehouses([]);
+      setWarehouses(Object.entries(data).map(([id, details]) => ({ id, ...details })));
     });
   }, []);
 
+                const selectedPartyObj = parties.find(
+                  p => p.id === selectedPartyId
+                );
+                const selectedPartyName = selectedPartyObj?.name || "";
+
+                const selectedWarehouseObj = warehouses.find(
+                  w => w.id === selectedWarehouseId
+                );
+                const selectedWarehouseName = selectedWarehouseObj?.name || "";
 
   // Pre-fill invoice if editing
   useEffect(() => {
@@ -95,6 +105,7 @@ const SalesInvoice = () => {
       setItems(invoiceToEdit.items || []);
       setSubtotal(invoiceToEdit.subtotal || invoiceToEdit.total || 0);
       setCreatedAt(invoiceToEdit.createdAt ? new Date(invoiceToEdit.createdAt) : new Date());
+      setSelectedWarehouseId(invoiceToEdit.warehouseId || ""); // prefill warehouse
       if (invoiceToEdit.items?.[0]?.category) setSelectedCategory(invoiceToEdit.items[0].category);
     }
   }, [invoiceToEdit]);
@@ -108,49 +119,33 @@ const SalesInvoice = () => {
     setStockWarning("");
   };
 
-  const handleBoxChange = (value) => {
-    if (!selectedStock || value < 0) return;
-    const totalStockPieces = (Number(selectedStock.boxes) || 0) * (Number(selectedStock.piecesPerBox) || 1);
-    const desiredPieces = value * (Number(selectedStock.piecesPerBox) || 1);
-    if (desiredPieces > totalStockPieces) {
-      setStockWarning(`Not enough stock! Only ${totalStockPieces} pieces available.`);
-    } else {
-      setStockWarning("");
-    }
-    setBox(value);
-  };
-
   const handleAddItem = () => {
     if (!selectedPartyId) return alert("Please select a party before adding items.");
-
-    if (!selectedStock || !box || !piecesPerBox || pricePerItem === "")
-      return alert("Please fill all fields.");
+    if (!selectedWarehouseId) return alert("Please select a warehouse before adding items.");
+    if (!selectedStock || !box || !piecesPerBox || pricePerItem === "") return alert("Please fill all fields.");
 
     const totalStockPieces = (Number(selectedStock.boxes) || 0) * (Number(selectedStock.piecesPerBox) || 1);
     const desiredPieces = Number(box) * Number(piecesPerBox);
-    if (desiredPieces > totalStockPieces)
-      return alert(`Cannot add! Only ${totalStockPieces} pieces available in stock.`);
+    if (desiredPieces > totalStockPieces) return alert(`Cannot add! Only ${totalStockPieces} pieces available.`);
 
-    const quantity = Number(box) * Number(piecesPerBox);
-    const price = parseFloat(pricePerItem);
-    const totalItem = round2(quantity * price);
+    const totalItem = round2(desiredPieces * Number(pricePerItem));
 
     const newItem = {
       partyId: selectedPartyId,
+      warehouseId: selectedWarehouseId, // <-- save warehouse per item
       productName: selectedStock.productName,
       category: selectedStock.category,
       box: Number(box),
       piecesPerBox: Number(piecesPerBox),
-      pricePerItem: price,
+      pricePerItem: Number(pricePerItem),
       total: totalItem,
       stockId: selectedStock.id,
       dateKey: selectedStock.dateKey,
     };
 
     setItems([...items, newItem]);
-    setSubtotal((prev) => round2(prev + totalItem));
+    setSubtotal(prev => round2(prev + totalItem));
 
-    // reset selection
     setSelectedStock(null);
     setBox("");
     setPiecesPerBox("");
@@ -161,7 +156,7 @@ const SalesInvoice = () => {
   const handleDeleteItem = (index) => {
     const itemToDelete = items[index];
     setItems(items.filter((_, i) => i !== index));
-    setSubtotal((prev) => round2(prev - (Number(itemToDelete.total) || 0)));
+    setSubtotal(prev => round2(prev - (Number(itemToDelete.total) || 0)));
   };
 
   const updateStockAfterSale = async (saleItems) => {
@@ -181,6 +176,7 @@ const SalesInvoice = () => {
 
   const handleCreateSales = async () => {
     if (!selectedPartyId) return alert("Please select a party.");
+    if (!selectedWarehouseId) return alert("Please select a warehouse.");
     if (items.length === 0) return alert("Add items first.");
 
     const isoDateTime = formatToISO(createdAt);
@@ -200,6 +196,7 @@ const SalesInvoice = () => {
       const saleData = {
         createdAt: isoDateTime,
         partyId: selectedPartyId,
+        warehouseId: selectedWarehouseId, // save warehouse
         items,
         subtotal,
         total: subtotal,
@@ -217,10 +214,23 @@ const SalesInvoice = () => {
     }
   };
 
-  const totalBoxes = items.reduce((s, i) => s + Number(i.box || 0), 0);
-  const filteredStocks = selectedCategory ? stocks.filter((s) => s.category === selectedCategory) : [];
-  const selectedPartyObj = parties.find(p => p.id === selectedPartyId);
-  const selectedPartyName = selectedPartyObj?.name || "";
+  // Filter stocks based on selected category AND selected warehouse
+  const filteredStocks =
+  selectedCategory && selectedWarehouseName
+    ? stocks.filter(
+        s =>
+          s.category === selectedCategory &&
+          s.warehouse === selectedWarehouseName
+      )
+    : [];
+
+
+  const totalBoxes = items.reduce(
+    (sum, item) => sum + Number(item.box || 0),
+    0
+  );
+
+
 
   return (
     <div className="max-w-6xl mx-auto p-6 mt-10 space-y-6">
@@ -237,8 +247,9 @@ const SalesInvoice = () => {
         <div className="w-8" />
       </header>
 
-      {/* Party & Date */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+      {/* Party, Date & Warehouse */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        {/* PARTY */}
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium">Party</label>
           <Popover open={partyOpen} onOpenChange={setPartyOpen}>
@@ -246,7 +257,7 @@ const SalesInvoice = () => {
               <Button
                 variant="outline"
                 className="w-full justify-between px-3"
-                disabled={items.length > 0} // LOCK if items already exist
+                disabled={items.length > 0}
               >
                 {selectedPartyName || "-- Choose Party --"}
                 <ChevronsUpDown className="h-4 w-4 opacity-50" />
@@ -257,27 +268,17 @@ const SalesInvoice = () => {
                 <CommandInput placeholder="Search party..." onValueChange={setSearchText} />
                 <CommandList>
                   <CommandEmpty>No party found.</CommandEmpty>
-                  {parties
-                    .filter(p => (p.name || "").toLowerCase().includes((searchText || "").toLowerCase()))
+                  {parties.filter(p => (p.name || "").toLowerCase().includes((searchText || "").toLowerCase()))
                     .map((p, i) => (
                       <CommandItem
                         key={i}
                         value={p.id}
                         onSelect={() => {
-                          if (items.length === 0) {
-                            setSelectedPartyId(p.id);
-                            setPartyOpen(false);
-                          } else {
-                            alert("Party cannot be changed after adding items.");
-                          }
+                          if (items.length === 0) { setSelectedPartyId(p.id); setPartyOpen(false); }
+                          else alert("Party cannot be changed after adding items.");
                         }}
                       >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            selectedPartyId === p.id ? "opacity-100" : "opacity-0"
-                          )}
-                        />
+                        <Check className={cn("mr-2 h-4 w-4", selectedPartyId === p.id ? "opacity-100" : "opacity-0")} />
                         {p.name}
                       </CommandItem>
                     ))}
@@ -287,16 +288,49 @@ const SalesInvoice = () => {
           </Popover>
         </div>
 
+        {/* DATE */}
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium">Invoice Date</label>
           <DatePicker
             selected={createdAt}
-            onChange={(d) => setCreatedAt(d)}
+            onChange={setCreatedAt}
             timeIntervals={1}
             dateFormat="dd/MM/yyyy"
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
             maxDate={new Date()}
           />
+        </div>
+
+        {/* WAREHOUSE */}
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium">Warehouse</label>
+          <Popover open={warehouseOpen} onOpenChange={setWarehouseOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-full justify-between px-3"
+                disabled={items.length > 0} // lock after items
+              >
+                {selectedWarehouseName || "-- Select Warehouse --"}
+                <ChevronsUpDown className="h-4 w-4 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="p-0 w-[260px]">
+              <Command>
+                <CommandInput placeholder="Search warehouse..." onValueChange={setSearchText} />
+                <CommandList>
+                  <CommandEmpty>No warehouse found.</CommandEmpty>
+                  {warehouses.filter(w => (w.name || "").toLowerCase().includes((searchText || "").toLowerCase()))
+                    .map((w, i) => (
+                      <CommandItem key={i} value={w.id} onSelect={() => { setSelectedWarehouseId(w.id); setWarehouseOpen(false); }}>
+                        <Check className={cn("mr-2 h-4 w-4", selectedWarehouseId === w.id ? "opacity-100" : "opacity-0")} />
+                        {w.name}
+                      </CommandItem>
+                    ))}
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
@@ -315,7 +349,18 @@ const SalesInvoice = () => {
             <PopoverContent className="p-0 w-[260px]">
               <Command>
                 <CommandEmpty>No category found.</CommandEmpty>
-                {Array.from(new Set(stocks.map(s => s.category))).map((cat, i) => (
+                {Array.from(
+                  new Set(
+                    stocks
+                      .filter(
+                        s =>
+                          selectedWarehouseName &&
+                          s.warehouse === selectedWarehouseName
+                      )
+                      .map(s => s.category)
+                      .filter(Boolean)
+                  )
+                ).map((cat, i) => (
                   <CommandItem key={i} onSelect={() => { setSelectedCategory(cat); setSelectedStock(null); setCategoryOpen(false); }}>
                     {cat}
                   </CommandItem>
@@ -340,11 +385,28 @@ const SalesInvoice = () => {
                 <CommandInput placeholder="Search product..." onValueChange={setSearchText} />
                 <CommandList>
                   <CommandEmpty>No product found.</CommandEmpty>
-                  {filteredStocks.filter(s => (s.productName || "").toLowerCase().includes((searchText || "").toLowerCase())).map(s => (
-                    <CommandItem key={s.id} onSelect={() => handleSelectStock(s)}>
-                      <Check className={cn("mr-2 h-4 w-4", selectedStock?.id === s.id ? "opacity-100" : "opacity-0")} />
-                      {s.productName}
-                    </CommandItem>
+                  {filteredStocks
+                    .filter(s =>
+                      (s.productName || "")
+                        .toLowerCase()
+                        .includes((searchText || "").toLowerCase())
+                    )
+                    .map((s) => (
+                      <CommandItem
+                        key={s.id}
+                        value={s.id}
+                        onSelect={() => {
+                          handleSelectStock(s);
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            selectedStock?.id === s.id ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        {s.productName}
+                      </CommandItem>
                   ))}
                 </CommandList>
               </Command>
@@ -355,11 +417,7 @@ const SalesInvoice = () => {
         {/* Box */}
         <div className="flex flex-col gap-1 w-full">
           <label className="text-sm font-medium">Box</label>
-          <Input
-            type="number"
-            value={box}
-            onChange={(e) => setBox(e.target.value)} // ← keep as string for blank
-          />
+          <Input type="number" value={box} onChange={(e) => setBox(e.target.value)} />
           {stockWarning && <p className="text-red-500 text-xs mt-1">{stockWarning}</p>}
         </div>
 
@@ -437,3 +495,4 @@ const SalesInvoice = () => {
 };
 
 export default SalesInvoice;
+

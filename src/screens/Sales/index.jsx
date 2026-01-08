@@ -14,22 +14,31 @@ import { ref, onValue, set } from "firebase/database";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
+const ITEMS_PER_PAGE = 20;
+
 const SalesScreen = () => {
   const navigate = useNavigate();
 
   const [sales, setSales] = useState([]);
   const [partiesMap, setPartiesMap] = useState({});
+  const [warehousesMap, setWarehousesMap] = useState({});
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedDate, setSelectedDate] = useState(null);
+
+  // const [selectedDate, setSelectedDate] = useState(null); // 🔒 kept for future use
+
   const [sortConfig, setSortConfig] = useState({
     key: "createdAt",
-    direction: "desc",
+    direction: "asc", // oldest → newest
   });
+
+  const [currentPage, setCurrentPage] = useState(1);
 
   /* ---------- Helpers ---------- */
   const round2 = (num) =>
     Math.round((Number(num) + Number.EPSILON) * 100) / 100;
 
+  // 🔒 Date helpers kept (commented)
+  /*
   const formatDate = (dateString) => {
     if (!dateString) return "-";
     const d = new Date(dateString);
@@ -43,6 +52,7 @@ const SalesScreen = () => {
     d1.getFullYear() === d2.getFullYear() &&
     d1.getMonth() === d2.getMonth() &&
     d1.getDate() === d2.getDate();
+  */
 
   /* ---------- Fetch Sales ---------- */
   useEffect(() => {
@@ -71,7 +81,7 @@ const SalesScreen = () => {
     return () => unsub();
   }, []);
 
-  /* ---------- Fetch Parties (name + city) ---------- */
+  /* ---------- Fetch Parties ---------- */
   useEffect(() => {
     const partyRef = ref(db, "parties");
     const unsub = onValue(partyRef, (snapshot) => {
@@ -95,6 +105,27 @@ const SalesScreen = () => {
     return () => unsub();
   }, []);
 
+  /* ---------- Fetch Warehouses ---------- */
+  useEffect(() => {
+    const whRef = ref(db, "warehouse");
+    const unsub = onValue(whRef, (snapshot) => {
+      const data = snapshot.val();
+      if (!data) {
+        setWarehousesMap({});
+        return;
+      }
+
+      const map = {};
+      Object.entries(data).forEach(([id, details]) => {
+        map[id] = details.name || "-";
+      });
+
+      setWarehousesMap(map);
+    });
+
+    return () => unsub();
+  }, []);
+
   /* ---------- Filters ---------- */
   const filteredSales = sales.filter((sale) => {
     const q = searchQuery.toLowerCase();
@@ -105,11 +136,14 @@ const SalesScreen = () => {
       party.name?.toLowerCase().includes(q) ||
       party.city?.toLowerCase().includes(q);
 
+    // 🔒 Date filter logic kept
+    /*
     const matchesDate = selectedDate
       ? isSameDate(new Date(sale.createdAt), selectedDate)
       : true;
+    */
 
-    return matchesSearch && matchesDate;
+    return matchesSearch; // && matchesDate
   });
 
   /* ---------- Sorting ---------- */
@@ -132,6 +166,21 @@ const SalesScreen = () => {
     return 0;
   });
 
+  /* ---------- Pagination ---------- */
+  const totalPages = Math.ceil(sortedSales.length / ITEMS_PER_PAGE);
+
+  const paginatedSales = sortedSales.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  useEffect(() => {
+    if (totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages]);
+
+  /* ---------- Sort UI ---------- */
   const handleSort = (key) => {
     setSortConfig((prev) =>
       prev.key === key
@@ -149,7 +198,7 @@ const SalesScreen = () => {
     );
   };
 
-  /* ---------- Delete Invoice ---------- */
+  /* ---------- Delete ---------- */
   const deleteInvoice = (sale) => {
     if (!window.confirm("Delete this invoice?")) return;
     const delRef = ref(db, `sales/${sale._dateKey}/${sale._invoiceKey}`);
@@ -170,33 +219,25 @@ const SalesScreen = () => {
           <ArrowLeft className="h-4 w-4" />
         </Button>
 
-        <h1 className="text-xl font-semibold text-center">Sales Invoices</h1>
+        <h1 className="text-xl font-semibold">Sales Invoices</h1>
 
         <Button
           onClick={() => navigate("/sales/create-sales")}
-          className="absolute right-0 top-1/2 -translate-y-1/2 h-9 text-sm flex items-center"
+          className="absolute right-0 top-1/2 -translate-y-1/2 h-9 text-sm"
         >
           <Plus className="h-4 w-4 mr-2" />
           Create Sales
         </Button>
       </div>
 
-      {/* Filters */}
-      <div className="flex justify-center gap-4">
-        <DatePicker
-          selected={selectedDate}
-          onChange={(date) => setSelectedDate(date)}
-          dateFormat="dd-MM-yyyy"
-          placeholderText="Select date"
-          className="border border-gray-400 rounded px-3 py-2 text-base text-center"
-          isClearable
-        />
+      {/* Search */}
+      <div className="flex justify-center">
         <input
           type="text"
           placeholder="Search invoices..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="border border-gray-400 rounded px-3 py-2 text-base w-60"
+          className="border border-gray-400 rounded px-3 py-2 w-64"
         />
       </div>
 
@@ -204,13 +245,8 @@ const SalesScreen = () => {
       <div className="overflow-x-auto">
         <table className="w-full table-auto border border-gray-300 text-center">
           <thead>
-            <tr className="bg-gray-100 text-base">
-              <th
-                className="border p-2 w-35 text-base font-semibold cursor-pointer"
-                onClick={() => handleSort("createdAt")}
-              >
-                Invoice Date {renderSortIcon("createdAt")}
-              </th>
+            <tr className="bg-gray-100">
+              {/* 🔒 Date column removed */}
               <th
                 className="border p-3 cursor-pointer"
                 onClick={() => handleSort("invoiceNumber")}
@@ -224,20 +260,21 @@ const SalesScreen = () => {
                 Party {renderSortIcon("party")}
               </th>
               <th className="border p-3">Place</th>
+              <th className="border p-3">Warehouse</th>
               <th className="border p-3">Total</th>
               <th className="border p-3">Action</th>
             </tr>
           </thead>
 
           <tbody>
-            {sortedSales.length === 0 ? (
+            {paginatedSales.length === 0 ? (
               <tr>
                 <td colSpan={6} className="p-6">
                   No invoices found.
                 </td>
               </tr>
             ) : (
-              sortedSales.map((sale) => {
+              paginatedSales.map((sale) => {
                 const totalAmount = round2(
                   sale.items.reduce(
                     (sum, item) => sum + Number(item.total || 0),
@@ -246,15 +283,11 @@ const SalesScreen = () => {
                 );
 
                 const party = partiesMap[sale.partyId] || {};
+                const warehouseName =
+                  warehousesMap[sale.warehouseId] || "-";
 
                 return (
-                  <tr
-                    key={sale._invoiceKey}
-                    className="hover:bg-gray-50 text-base"
-                  >
-                    <td className="border p-5 text-m">
-                      {formatDate(sale.createdAt)}
-                    </td>
+                  <tr key={sale._invoiceKey} className="hover:bg-gray-50">
                     <td className="border p-3">
                       <button
                         className="text-blue-600 underline"
@@ -267,6 +300,7 @@ const SalesScreen = () => {
                     </td>
                     <td className="border p-3">{party.name || "-"}</td>
                     <td className="border p-3">{party.city || "-"}</td>
+                    <td className="border p-3">{warehouseName}</td>
                     <td className="border p-3">
                       {totalAmount.toFixed(2)}
                     </td>
@@ -286,6 +320,33 @@ const SalesScreen = () => {
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex justify-center gap-2 mt-4">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage((p) => p - 1)}
+          >
+            Prev
+          </Button>
+
+          <span className="px-3 py-1 border rounded">
+            Page {currentPage} of {totalPages}
+          </span>
+
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage((p) => p + 1)}
+          >
+            Next
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
