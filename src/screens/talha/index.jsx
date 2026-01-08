@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
 import { ref, onValue, off, update } from "firebase/database";
 import { Button } from "../../components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -40,22 +40,27 @@ const TalhaPurchasesLedger = () => {
       );
       const purchases = purchasesSnap.val() || {};
 
-      Object.entries(purchases).forEach(([date, items]) => {
-        Object.entries(items || {}).forEach(([id, p]) => {
-          if (seen.has(id)) return;
-          seen.add(id);
+      Object.entries(purchases).forEach(([dateKey, items]) => {
+      Object.entries(items || {}).forEach(([id, p], index) => {
+        if (seen.has(id)) return;
+        seen.add(id);
 
-          const amt = Number(p.amount || p.amountINR || 0);
+        const amt = Number(p.amount || p.amountINR || 0);
 
-          temp.push({
-            date: p.date || date,
-            type: "Purchase",
-            amount: -amt,
-            notes: p.notes || "-",
-            source: "-",
-          });
+        // Use p.createdAt if exists, otherwise generate a temp time
+        const timestamp =
+          p.createdAt || new Date(`${p.date}T00:00:00`).getTime() + index * 1000;
+
+        temp.push({
+          date: p.date || dateKey,
+          timestamp, // <--- temporary numeric time for sorting and display
+          type: "Purchase",
+          amount: -amt,
+          notes: p.notes || "-",
+          source: "-",
         });
       });
+    });
 
       /* ---------------- PAYMENTS ---------------- */
       const paymentsSnap = await new Promise((res) =>
@@ -80,17 +85,17 @@ const TalhaPurchasesLedger = () => {
               const signed =
                 p.toName === BANK_NAME ? amt : -amt;
 
+              const ts = p.createdAt || new Date(`${p.date}T00:00:00`).getTime() + txnIndex * 1000;
+
               temp.push({
                 date: p.date || date,
+                timestamp: ts,
                 type: "Payment",
                 amount: signed,
                 notes: p.note || "-",
-                source:
-                  signed > 0
-                    ? `from ${p.fromName}`
-                    : `to ${p.toName}`,
+                source: signed > 0 ? `from ${p.fromName}` : `to ${p.toName}`,
               });
-            });
+                          });
           });
         });
       });
@@ -111,8 +116,10 @@ const TalhaPurchasesLedger = () => {
 
             const amt = Number(e.amount || 0);
 
+            const ts = e.createdAt ? new Date(e.createdAt).getTime() : new Date(`${e.date}T00:00:00`).getTime() + idx * 1000;
             temp.push({
               date: e.date || new Date().toISOString(),
+              timestamp: ts,
               type: "Expense",
               amount: -amt,
               notes: e.expenseFor || "-",
@@ -123,7 +130,7 @@ const TalhaPurchasesLedger = () => {
       });
 
       /* ---------------- SORT + RUNNING BALANCE ---------------- */
-      temp.sort((a, b) => new Date(a.date) - new Date(b.date));
+      temp.sort((a, b) => a.timestamp - b.timestamp);
 
       let rb = 0;
       const finalEntries = temp.map((e) => {
@@ -182,32 +189,47 @@ const TalhaPurchasesLedger = () => {
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
       {/* HEADER */}
-      <div className="flex items-center gap-2 border-b pb-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(-1)}
-          className="h-9 w-9 p-0"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
+      <div className="flex items-center justify-between border-b pb-2">
+        {/* LEFT SIDE */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(-1)}
+            className="h-9 w-9 p-0"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
 
-        <DatePicker
-          selected={fromDate}
-          onChange={setFromDate}
-          placeholderText="From"
-          isClearable
-          className="border px-2 py-1 text-sm rounded"
-        />
-        <DatePicker
-          selected={toDate}
-          onChange={setToDate}
-          placeholderText="To"
-          isClearable
-          className="border px-2 py-1 text-sm rounded"
-        />
+          <DatePicker
+            selected={fromDate}
+            onChange={setFromDate}
+            placeholderText="From"
+            isClearable
+            className="border px-2 py-1 text-sm rounded"
+          />
+          <DatePicker
+            selected={toDate}
+            onChange={setToDate}
+            placeholderText="To"
+            isClearable
+            className="border px-2 py-1 text-sm rounded"
+          />
+        </div>
+
+        {/* RIGHT SIDE */}
+        <Button
+          size="sm"
+          onClick={() => navigate("/purchase/add")}
+          className="flex items-center gap-2"
+        >
+          <Plus className="h-4 w-4" />
+          Add Purchase
+        </Button>
       </div>
 
+
+      {/*hello*/}
       <h2 className="text-xl font-semibold text-center">
         {BANK_NAME}
       </h2>
@@ -228,8 +250,8 @@ const TalhaPurchasesLedger = () => {
             {pageData.map((e, i) => (
               <tr key={i}>
                 <td className="border p-3">
-                  {new Date(e.date).toLocaleDateString("en-GB")}
-                </td>
+                  {new Date(e.timestamp).toLocaleDateString("en-GB")}
+               </td>
                 <td className="border p-3">{e.type}</td>
                 <td
                   className={`border p-3 font-semibold ${

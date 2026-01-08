@@ -22,68 +22,15 @@ export default function AddPurchase() {
   const formatAmount = (num) => Number(num).toFixed(2);
 
   // --------------------------
-  // REAL-TIME BALANCE CALCULATION
+  // LIVE BALANCE FROM DB
   // --------------------------
   useEffect(() => {
-    const purchaseRef = ref(db, "phurchase/Talha");
-    const paymentRef = ref(db, "payments");
-    const expenseRef = ref(db, "expenses");
-
-    const calculateBalance = (purchases, payments, expenses) => {
-      let total = 0;
-
-      // ---------------- Purchases (subtract) ----------------
-      Object.values(purchases || {}).forEach((dateNode) => {
-        Object.values(dateNode || {}).forEach((p) => {
-          total -= Number(p.amountINR || 0);
-        });
-      });
-
-      // ---------------- Payments (add) ----------------
-      Object.values(payments || {}).forEach((partyNode) => {
-        Object.values(partyNode || {}).forEach((dateNode) => {
-          Object.values(dateNode || {}).forEach((p) => {
-            if (p.toType === "account" && p.toName === BANK_NAME) {
-              total += Number(p.amount || 0);
-            }
-          });
-        });
-      });
-
-      // ---------------- Expenses (subtract) ----------------
-      Object.values(expenses || {}).forEach((dateNode) => {
-        Object.values(dateNode || {}).forEach((categories) => {
-          Object.entries(categories).forEach(([entity, items]) => {
-            if (entity === BANK_NAME) {
-              Object.values(items || {}).forEach((exp) => {
-                total -= Number(exp.amount || 0);
-              });
-            }
-          });
-        });
-      });
-
-      total = Math.round((total + Number.EPSILON) * 100) / 100;
-      setBalance(total);
-    };
-
-    // Subscribe to all nodes
-    const unsubPurchases = onValue(purchaseRef, (pSnap) => {
-      const purchases = pSnap.val() || {};
-      onValue(paymentRef, (paySnap) => {
-        const payments = paySnap.val() || {};
-        onValue(expenseRef, (expSnap) => {
-          const expenses = expSnap.val() || {};
-          calculateBalance(purchases, payments, expenses);
-        });
-      });
+    const balanceRef = ref(db, `accounts/${BANK_NAME}/balance`);
+    const unsub = onValue(balanceRef, (snap) => {
+      setBalance(snap.val() || 0);
     });
 
-    return () => {
-      off(purchaseRef);
-      off(paymentRef);
-      off(expenseRef);
-    };
+    return () => off(balanceRef, "value", unsub);
   }, []);
 
   // --------------------------
@@ -121,16 +68,18 @@ export default function AddPurchase() {
   return (
     <div className="flex flex-col max-w-3xl mx-auto mt-10 p-4 space-y-6 bg-background">
       {/* Header */}
-      <header className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate("/talha")}
-          className="h-8 w-8 p-0 hover:bg-accent"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <h1 className="text-lg font-semibold text-foreground/90">Add Purchase</h1>
+      <header className="flex items-center gap-4 justify-between">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate("/talha")}
+            className="h-8 w-8 p-0 hover:bg-accent"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h1 className="text-lg font-semibold text-foreground/90">Add Purchase</h1>
+        </div>
       </header>
 
       {/* Current Balance */}
