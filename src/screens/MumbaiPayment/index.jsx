@@ -219,9 +219,9 @@ const BankLedger = () => {
             <tr>
               <th className="border p-3">Date</th>
               <th className="border p-3">Type</th>
-              <th className="border p-3">Amount</th>
-              <th className="border p-3">Notes</th>
               <th className="border p-3">Source</th>
+              <th className="border p-3">Notes</th>
+              <th className="border p-3">Amount</th>
               <th className="border p-3">Balance</th>
             </tr>
           </thead>
@@ -237,6 +237,8 @@ const BankLedger = () => {
                     {new Date(e.date).toLocaleDateString("en-GB")}
                   </td>
                   <td className="border p-3">{e.type}</td>
+                  <td className="border p-3">{e.source}</td>
+                  <td className="border p-3">{e.notes}</td>
                   <td
                     className={`border p-3 font-semibold ${
                       e.amount >= 0 ? "text-green-600" : "text-red-600"
@@ -244,8 +246,6 @@ const BankLedger = () => {
                   >
                     {Math.abs(e.amount).toFixed(2)}
                   </td>
-                  <td className="border p-3">{e.notes}</td>
-                  <td className="border p-3">{e.source}</td>
                   <td
                     className={`border p-3 font-semibold ${
                       e.runningBalance >= 0

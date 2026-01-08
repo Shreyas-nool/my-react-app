@@ -45,7 +45,8 @@ export default function Ledger() {
     if (!q) return true; // show all if search is empty
 
     return (
-      p.partyName.toLowerCase().startsWith(q) // ✅ match start of name
+      p.partyName.toLowerCase().startsWith(q) || // ✅ match start of name
+      p.city.toLowerCase().startsWith(q)
     );
   });
 
