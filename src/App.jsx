@@ -44,7 +44,7 @@ import BankDetails from "./screens/Bank/Bankdetails"; // Individual bank ledger
 import WareHouse from "./screens/warehouse";
 import AddWarehouse from "./screens/warehouse/AddWarehouse";
 import WarehouseDetails from "./screens/warehouse/WarehouseDetails.jsx";
-import TransferStock from "./screens/Warehouse/TransferStock";
+import TransferStock from "./screens/warehouse/TransferStock";
 
 /* =========================================================
    STOCK MODULE
