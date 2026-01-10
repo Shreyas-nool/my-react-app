@@ -26,6 +26,7 @@ const ExpenseScreen = () => {
 
       Object.entries(data).forEach(([category, entities]) => {
         Object.entries(entities || {}).forEach(([entity, items]) => {
+          if (entity === "Malad Payment") return; // ❌ skip Malad Payment
           Object.entries(items || {}).forEach(([id, exp]) => {
             all.push({
               ...exp,
@@ -108,7 +109,7 @@ const ExpenseScreen = () => {
       <div className="w-full text-center space-y-1">
         <h2 className="text-xl font-semibold">Expenses</h2>
         <p className="text-red-600 font-semibold">
-          Total: ₹{total.toFixed(2)}
+          Total: {total.toFixed(2)}
         </p>
       </div>
 
@@ -140,7 +141,7 @@ const ExpenseScreen = () => {
                     {new Date(exp.date).toLocaleDateString("en-GB")}
                   </td>
                   <td className="border p-3 font-semibold text-red-600">
-                    ₹{Number(exp.amount).toFixed(2)}
+                    {Number(exp.amount).toFixed(2)}
                   </td>
                   <td className="border p-3">{exp.expenseFor}</td>
                   <td className="border p-3 capitalize">{exp.category}</td>

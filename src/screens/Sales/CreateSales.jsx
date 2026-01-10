@@ -130,22 +130,47 @@ const SalesInvoice = () => {
 
     const totalItem = round2(desiredPieces * Number(pricePerItem));
 
-    const newItem = {
-      partyId: selectedPartyId,
-      warehouseId: selectedWarehouseId, // <-- save warehouse per item
-      productName: selectedStock.productName,
-      category: selectedStock.category,
-      box: Number(box),
-      piecesPerBox: Number(piecesPerBox),
-      pricePerItem: Number(pricePerItem),
-      total: totalItem,
-      stockId: selectedStock.id,
-      dateKey: selectedStock.dateKey,
-    };
+    // Check if same product already exists with same piecesPerBox and pricePerItem
+    const existingIndex = items.findIndex(item =>
+      item.productName === selectedStock.productName &&
+      item.piecesPerBox === Number(piecesPerBox) &&
+      item.pricePerItem === Number(pricePerItem)
+    );
 
-    setItems([...items, newItem]);
-    setSubtotal(prev => round2(prev + totalItem));
+    if (existingIndex !== -1) {
+      // Merge boxes if same product, pieces per box, and price
+      const updatedItems = items.map((item, idx) => {
+        if (idx === existingIndex) {
+          const newBoxCount = item.box + Number(box);
+          return {
+            ...item,
+            box: newBoxCount,
+            total: round2(newBoxCount * item.piecesPerBox * item.pricePerItem),
+          };
+        }
+        return item;
+      });
+      setItems(updatedItems);
+      setSubtotal(prev => round2(prev + totalItem));
+    } else {
+      // Add as new item
+      const newItem = {
+        partyId: selectedPartyId,
+        warehouseId: selectedWarehouseId,
+        productName: selectedStock.productName,
+        category: selectedStock.category,
+        box: Number(box),
+        piecesPerBox: Number(piecesPerBox),
+        pricePerItem: Number(pricePerItem),
+        total: totalItem,
+        stockId: selectedStock.id,
+        dateKey: selectedStock.dateKey,
+      };
+      setItems([...items, newItem]);
+      setSubtotal(prev => round2(prev + totalItem));
+    }
 
+    // Reset selection
     setSelectedStock(null);
     setBox("");
     setPiecesPerBox("");

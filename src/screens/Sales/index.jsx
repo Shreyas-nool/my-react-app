@@ -23,22 +23,15 @@ const SalesScreen = () => {
   const [partiesMap, setPartiesMap] = useState({});
   const [warehousesMap, setWarehousesMap] = useState({});
   const [searchQuery, setSearchQuery] = useState("");
-
-  // const [selectedDate, setSelectedDate] = useState(null); // 🔒 kept for future use
-
   const [sortConfig, setSortConfig] = useState({
     key: "createdAt",
-    direction: "asc", // oldest → newest
+    direction: "asc",
   });
-
   const [currentPage, setCurrentPage] = useState(1);
 
-  /* ---------- Helpers ---------- */
   const round2 = (num) =>
     Math.round((Number(num) + Number.EPSILON) * 100) / 100;
 
-  // 🔒 Date helpers kept (commented)
-  /*
   const formatDate = (dateString) => {
     if (!dateString) return "-";
     const d = new Date(dateString);
@@ -47,12 +40,6 @@ const SalesScreen = () => {
     const yyyy = d.getFullYear();
     return `${dd}-${mm}-${yyyy}`;
   };
-
-  const isSameDate = (d1, d2) =>
-    d1.getFullYear() === d2.getFullYear() &&
-    d1.getMonth() === d2.getMonth() &&
-    d1.getDate() === d2.getDate();
-  */
 
   /* ---------- Fetch Sales ---------- */
   useEffect(() => {
@@ -131,19 +118,11 @@ const SalesScreen = () => {
     const q = searchQuery.toLowerCase();
     const party = partiesMap[sale.partyId] || {};
 
-    const matchesSearch =
+    return (
       sale.invoiceNumber?.toString().includes(q) ||
       party.name?.toLowerCase().includes(q) ||
-      party.city?.toLowerCase().includes(q);
-
-    // 🔒 Date filter logic kept
-    /*
-    const matchesDate = selectedDate
-      ? isSameDate(new Date(sale.createdAt), selectedDate)
-      : true;
-    */
-
-    return matchesSearch; // && matchesDate
+      party.city?.toLowerCase().includes(q)
+    );
   });
 
   /* ---------- Sorting ---------- */
@@ -156,6 +135,9 @@ const SalesScreen = () => {
     } else if (sortConfig.key === "createdAt") {
       aVal = new Date(a.createdAt).getTime();
       bVal = new Date(b.createdAt).getTime();
+    } else if (sortConfig.key === "date") {
+      aVal = a._dateKey;
+      bVal = b._dateKey;
     } else {
       aVal = a[sortConfig.key];
       bVal = b[sortConfig.key];
@@ -241,12 +223,24 @@ const SalesScreen = () => {
         />
       </div>
 
+      <Button
+        onClick={() => navigate("/sales/report")}
+        className="absolute right-0 top-1/2 -translate-y-1/2 h-9 text-sm"
+      >
+        Sales Report
+      </Button>
+
       {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full table-auto border border-gray-300 text-center">
           <thead>
             <tr className="bg-gray-100">
-              {/* 🔒 Date column removed */}
+              <th
+                className="border p-3 cursor-pointer"
+                onClick={() => handleSort("date")}
+              >
+                Date {renderSortIcon("date")}
+              </th>
               <th
                 className="border p-3 cursor-pointer"
                 onClick={() => handleSort("invoiceNumber")}
@@ -269,7 +263,7 @@ const SalesScreen = () => {
           <tbody>
             {paginatedSales.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-6">
+                <td colSpan={7} className="p-6">
                   No invoices found.
                 </td>
               </tr>
@@ -283,11 +277,13 @@ const SalesScreen = () => {
                 );
 
                 const party = partiesMap[sale.partyId] || {};
-                const warehouseName =
-                  warehousesMap[sale.warehouseId] || "-";
+                const warehouseName = warehousesMap[sale.warehouseId] || "-";
 
                 return (
                   <tr key={sale._invoiceKey} className="hover:bg-gray-50">
+                    <td className="border p-3">
+                      {formatDate(sale.createdAt)}
+                    </td>
                     <td className="border p-3">
                       <button
                         className="text-blue-600 underline"
@@ -301,9 +297,7 @@ const SalesScreen = () => {
                     <td className="border p-3">{party.name || "-"}</td>
                     <td className="border p-3">{party.city || "-"}</td>
                     <td className="border p-3">{warehouseName}</td>
-                    <td className="border p-3">
-                      {totalAmount.toFixed(2)}
-                    </td>
+                    <td className="border p-3">{totalAmount.toFixed(2)}</td>
                     <td className="border p-3">
                       <Button
                         variant="destructive"

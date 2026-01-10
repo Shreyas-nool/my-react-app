@@ -4,31 +4,25 @@ import { ref, onValue } from "firebase/database";
 import { db } from "../../firebase";
 
 import { Button } from "../../components/ui/button";
-import { ArrowLeft, Plus, ChevronUp, ChevronDown } from "lucide-react";
+import { ArrowLeft, Plus, Landmark } from "lucide-react";
 
 export default function BanksLedger() {
   const navigate = useNavigate();
 
   const [banks, setBanks] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortConfig, setSortConfig] = useState({
-    key: "bankName",
-    direction: "asc",
-  });
 
-  /* ---------- Fetch Banks (live) ---------- */
+  /* ---------- Fetch Banks ---------- */
   useEffect(() => {
     const banksRef = ref(db, "banks");
 
     const unsub = onValue(banksRef, (snapshot) => {
       const data = snapshot.val() || {};
-
       const list = Object.entries(data).map(([id, bank]) => ({
         bankId: id,
         bankName: bank.bankName || "-",
-        balance: Number(bank.balance || 0), // live balance
+        balance: Number(bank.balance || 0),
       }));
-
       setBanks(list);
     });
 
@@ -36,150 +30,99 @@ export default function BanksLedger() {
   }, []);
 
   /* ---------- Helpers ---------- */
-  const format2 = (num) => Number(num).toFixed(2);
+  const format2 = (n) => Number(n).toFixed(2);
 
   /* ---------- Search ---------- */
-  const filteredBanks = banks.filter((b) => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return true;
-    return b.bankName.toLowerCase().startsWith(q);
-  });
+  const filteredBanks = banks.filter((b) =>
+    b.bankName.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  /* ---------- Sorting ---------- */
-  const sortedBanks = [...filteredBanks].sort((a, b) => {
-    const aVal = a[sortConfig.key];
-    const bVal = b[sortConfig.key];
+  /* ---------- Net Balance ---------- */
+  const netBalance = filteredBanks.reduce((sum, b) => sum + b.balance, 0);
 
-    if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
-    if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
-    return 0;
-  });
-
-  const handleSort = (key) => {
-    setSortConfig((prev) =>
-      prev.key === key
-        ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
-        : { key, direction: "asc" }
-    );
-  };
-
-  const renderSortIcon = (key) => {
-    if (sortConfig.key !== key) return null;
-    return sortConfig.direction === "asc" ? (
-      <ChevronUp className="inline h-4 w-4 ml-1" />
-    ) : (
-      <ChevronDown className="inline h-4 w-4 ml-1" />
-    );
-  };
-
-  // Net Balance
-  const netBalance = banks.reduce((sum, b) => sum + b.balance, 0);
-
-  /* ---------- UI ---------- */
   return (
-    <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
-      {/* Header */}
+    <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-6">
+      {/* HEADER */}
       <div className="relative border-b pb-2 flex items-center justify-center">
-        {/* Back button */}
         <Button
           variant="ghost"
           size="sm"
           onClick={() => navigate("/")}
-          className="absolute left-0 top-1/2 -translate-y-1/2 h-9 w-9 p-0"
+          className="absolute left-0 h-9 w-9 p-0"
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
 
-        {/* Title */}
-        <h1 className="text-xl font-semibold text-center">
-          Banks Ledger Summary
-        </h1>
+        <h1 className="text-xl font-semibold">Banks</h1>
 
-        {/* Add Bank button */}
         <Button
           onClick={() => navigate("/banks/add-bank")}
-          className="absolute right-0 top-1/2 -translate-y-1/2 h-8 sm:h-9 text-sm font-medium bg-primary hover:bg-primary/90 flex items-center gap-2"
+          className="absolute right-0 h-9 text-sm flex items-center gap-2"
         >
-          <Plus className="h-4 w-4" /> Add Bank
+          <Plus className="h-4 w-4" />
+          Add Bank
         </Button>
       </div>
 
-      {/* Net Balance and Search on same line */}
-      <div className="flex justify-between items-center">
-        {/* Empty div to keep spacing */}
-        <div className="w-1/3"></div>
+      {/* SEARCH + NET BALANCE */}
+      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <input
+          type="text"
+          placeholder="Search bank..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="border rounded px-3 py-2 w-full sm:w-72"
+        />
 
-        {/* Search */}
-        <div className="w-1/3 flex justify-center">
-          <input
-            type="text"
-            placeholder="Search bank..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="border border-gray-400 rounded px-3 py-2 text-base w-72"
-          />
-        </div>
-
-        {/* Net Balance */}
-        <div className="w-1/3 text-right text-lg font-semibold">
+        <div className="text-lg font-semibold">
           Net Balance:{" "}
-          <span className={`${netBalance >= 0 ? "text-green-600" : "text-red-600"}`}>
+          <span
+            className={netBalance >= 0 ? "text-green-600" : "text-red-600"}
+          >
             {format2(netBalance)}
           </span>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto flex items-center justify-center">
-        <table className="w-200 table-auto border border-gray-300 text-center">
-          <thead>
-            <tr className="bg-gray-100 text-base">
-              <th
-                className="border p-4 cursor-pointer"
-                onClick={() => handleSort("bankName")}
-              >
-                Bank Name {renderSortIcon("bankName")}
-              </th>
+      {/* BANK CARDS */}
+      {filteredBanks.length === 0 ? (
+        <div className="text-center text-muted-foreground py-10">
+          No banks found
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {filteredBanks.map((bank) => (
+            <div
+              key={bank.bankId}
+              onClick={() =>
+                navigate(`/banks/${bank.bankId}`, { state: { bank } })
+              }
+              className="cursor-pointer rounded-xl border border-border/40 bg-card p-4 shadow-sm hover:shadow-md hover:bg-muted/30 transition-all"
+            >
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 flex items-center justify-center rounded-lg bg-primary/10">
+                  <Landmark className="h-6 w-6 text-primary" />
+                </div>
 
-              <th
-                className="border p-4 cursor-pointer"
-                onClick={() => handleSort("balance")}
-              >
-                Current Balance {renderSortIcon("balance")}
-              </th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {sortedBanks.length === 0 ? (
-              <tr>
-                <td colSpan={2} className="p-6">
-                  No banks found.
-                </td>
-              </tr>
-            ) : (
-              sortedBanks.map((bank) => (
-                <tr
-                  key={bank.bankId}
-                  className="hover:bg-gray-50 cursor-pointer text-base"
-                  onClick={() =>
-                    navigate(`/banks/${bank.bankId}`, { state: { bank } })
-                  }
-                >
-                  <td className="border p-4 font-medium">{bank.bankName}</td>
-                  <td
-                    className={`border p-4 font-semibold ${
-                      bank.balance >= 0 ? "text-green-600" : "text-red-600"
+                <div className="flex flex-col">
+                  <h3 className="text-lg font-semibold">
+                    {bank.bankName}
+                  </h3>
+                  <span
+                    className={`text-sm font-medium ${
+                      bank.balance >= 0
+                        ? "text-green-600"
+                        : "text-red-600"
                     }`}
                   >
                     {format2(bank.balance)}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

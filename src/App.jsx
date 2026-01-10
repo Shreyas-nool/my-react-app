@@ -61,7 +61,11 @@ import SrTransferMoney from "./screens/SR/SrTransferMoney";
 import BankDetails from "./screens/Bank/Bankdetails";
 
 import MumbaiPayment from "./screens/MumbaiPayment";
-import MaladPayment from "./screens/MaladPayment"
+import MaladPayment from "./screens/MaladPayment";
+
+import SalesReport from "./screens/sales/SalesReport";
+import CategorySalesReport from "./screens/sales/CategorySalesReport";
+
 
 // ✅ FULLY FIXED ROUTER
 const router = createBrowserRouter([
@@ -118,6 +122,8 @@ const router = createBrowserRouter([
           { path: "/sales/list", element: <SalesList /> },
           { path: "/sales/print-multiple", element: <PrintMultipleInvoices /> },
           { path: "/sales/view-invoice", element: <ViewInvoice /> },
+          { path: "/sales/report", element: <SalesReport />},
+          {path: "/sales/report/category", element: <CategorySalesReport />},
 
           // Payments
           { path: "/payment", element: <PaymentScreen /> },
@@ -161,8 +167,7 @@ const router = createBrowserRouter([
           {path:"/mumbaipayment", element:<MumbaiPayment />},
 
           //Malad Payment
-          {path:"/maladpayment", element:<MaladPayment />},
-
+          { path: "/maladpayment", element: <MaladPayment />},
         ],
       },
     ],

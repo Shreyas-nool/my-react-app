@@ -3,16 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
 import { ref, onValue, off, update } from "firebase/database";
 import { Button } from "../../components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
 const ITEMS_PER_PAGE = 20;
 const BANK_NAME = "Malad Payment";
-
-/* ✅ round helper */
-const round2 = (n) =>
-  Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 const BankLedger = () => {
   const navigate = useNavigate();
@@ -35,7 +32,7 @@ const BankLedger = () => {
       const temp = [];
       const seen = new Set();
 
-      /* ---------------- PURCHASES ---------------- */
+      /* ---------- PURCHASES ---------- */
       const purchasesSnap = await new Promise((res) =>
         onValue(purchaseRef, res, { onlyOnce: true })
       );
@@ -45,9 +42,7 @@ const BankLedger = () => {
         Object.entries(items || {}).forEach(([id, p]) => {
           if (seen.has(id)) return;
           seen.add(id);
-
           const amt = Number(p.amount || p.amountINR || 0);
-
           temp.push({
             date: p.date || date,
             type: "Purchase",
@@ -58,7 +53,7 @@ const BankLedger = () => {
         });
       });
 
-      /* ---------------- PAYMENTS ---------------- */
+      /* ---------- PAYMENTS ---------- */
       const paymentsSnap = await new Promise((res) =>
         onValue(paymentRef, res, { onlyOnce: true })
       );
@@ -69,33 +64,26 @@ const BankLedger = () => {
           Object.entries(dates || {}).forEach(([date, txns]) => {
             Object.entries(txns || {}).forEach(([txnId, p]) => {
               if (!p?.txnId || seen.has(p.txnId)) return;
-
               const isAccount =
                 (p.fromType === "account" && p.fromName === BANK_NAME) ||
                 (p.toType === "account" && p.toName === BANK_NAME);
-
               if (!isAccount) return;
               seen.add(p.txnId);
-
               const amt = Number(p.amount || 0);
               const signed = p.toName === BANK_NAME ? amt : -amt;
-
               temp.push({
                 date: p.date || date,
                 type: "Payment",
                 amount: signed,
                 notes: p.note || "-",
-                source:
-                  signed > 0
-                    ? `from ${p.fromName}`
-                    : `to ${p.toName}`,
+                source: signed > 0 ? `from ${p.fromName}` : `to ${p.toName}`,
               });
             });
           });
         });
       });
 
-      /* ---------------- EXPENSES ---------------- */
+      /* ---------- EXPENSES ---------- */
       const expensesSnap = await new Promise((res) =>
         onValue(expenseRef, res, { onlyOnce: true })
       );
@@ -104,13 +92,10 @@ const BankLedger = () => {
       Object.entries(expenses).forEach(([cat, entities]) => {
         Object.entries(entities || {}).forEach(([entity, items]) => {
           if (entity !== BANK_NAME) return;
-
           Object.entries(items || {}).forEach(([id, e]) => {
             if (seen.has(id)) return;
             seen.add(id);
-
             const amt = Number(e.amount || 0);
-
             temp.push({
               date: e.date || new Date().toISOString(),
               type: "Expense",
@@ -122,7 +107,7 @@ const BankLedger = () => {
         });
       });
 
-      /* ---------------- SORT + RUNNING BALANCE ---------------- */
+      /* ---------- SORT + RUNNING BALANCE ---------- */
       temp.sort((a, b) => new Date(a.date) - new Date(b.date));
 
       let rb = 0;
@@ -132,19 +117,15 @@ const BankLedger = () => {
       });
 
       const finalBalance = round2(rb);
-
       setEntries(finalEntries);
       setBalance(finalBalance);
 
-      /* ✅ AUTO-SYNC BALANCE (CACHE ONLY – SAME AS PREV PAGES) */
       await update(ref(db, `accounts/${BANK_NAME}`), {
         balance: finalBalance,
         updatedAt: new Date().toISOString(),
       });
 
-      const lastPage =
-        Math.ceil(finalEntries.length / ITEMS_PER_PAGE) || 1;
-      setCurrentPage(lastPage);
+      setCurrentPage(Math.ceil(finalEntries.length / ITEMS_PER_PAGE) || 1);
       setLoading(false);
     };
 
@@ -161,7 +142,6 @@ const BankLedger = () => {
     };
   }, []);
 
-  /* ---------------- FILTER ---------------- */
   const filtered = useMemo(() => {
     return entries.filter((e) => {
       const d = new Date(e.date);
@@ -182,30 +162,44 @@ const BankLedger = () => {
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
       {/* HEADER */}
-      <div className="flex items-center gap-2 border-b pb-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(-1)}
-          className="h-9 w-9 p-0"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
+      <div className="flex items-center justify-between border-b pb-2">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(-1)}
+            className="h-9 w-9 p-0"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
 
-        <DatePicker
-          selected={fromDate}
-          onChange={setFromDate}
-          placeholderText="From"
-          isClearable
-          className="border px-2 py-1 text-sm rounded"
-        />
-        <DatePicker
-          selected={toDate}
-          onChange={setToDate}
-          placeholderText="To"
-          isClearable
-          className="border px-2 py-1 text-sm rounded"
-        />
+          <DatePicker
+            selected={fromDate}
+            onChange={setFromDate}
+            placeholderText="From"
+            isClearable
+            className="border px-2 py-1 text-sm rounded"
+          />
+          <DatePicker
+            selected={toDate}
+            onChange={setToDate}
+            placeholderText="To"
+            isClearable
+            className="border px-2 py-1 text-sm rounded"
+          />
+        </div>
+
+        {/* ADD EXPENSE BUTTON */}
+        <Button
+          onClick={() => navigate("/expense/create-expense", {
+                      state: { lockCategory: "account", lockEntity: "Malad Payment" },
+                    })
+                  }
+          className="h-9 px-3 flex items-center gap-1"
+        >
+          <Plus className="h-4 w-4" />
+          Add Expense
+        </Button>
       </div>
 
       {/* TITLE */}
@@ -244,18 +238,14 @@ const BankLedger = () => {
                   <td className="border p-3">{e.notes}</td>
                   <td
                     className={`border p-3 font-semibold ${
-                      e.amount >= 0
-                        ? "text-green-600"
-                        : "text-red-600"
+                      e.amount >= 0 ? "text-green-600" : "text-red-600"
                     }`}
                   >
                     {Math.abs(e.amount).toFixed(2)}
                   </td>
                   <td
                     className={`border p-3 font-semibold ${
-                      e.runningBalance >= 0
-                        ? "text-green-600"
-                        : "text-red-600"
+                      e.runningBalance >= 0 ? "text-green-600" : "text-red-600"
                     }`}
                   >
                     {e.runningBalance.toFixed(2)}
@@ -270,9 +260,7 @@ const BankLedger = () => {
               </td>
               <td
                 className={`border p-3 ${
-                  balance >= 0
-                    ? "text-green-600"
-                    : "text-red-600"
+                  balance >= 0 ? "text-green-600" : "text-red-600"
                 }`}
               >
                 {balance.toFixed(2)}

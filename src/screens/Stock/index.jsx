@@ -16,21 +16,9 @@ const StockScreen = () => {
   const [activeCategory, setActiveCategory] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState({
-    key: "date",
-    direction: "desc",
+    key: "productName",
+    direction: "asc",
   });
-
-  /* ---------- Helpers ---------- */
-  const formatDate = (dateString) => {
-    if (!dateString) return "-";
-    const d = new Date(dateString);
-    return `${String(d.getDate()).padStart(2, "0")}-${String(
-      d.getMonth() + 1
-    ).padStart(2, "0")}-${d.getFullYear()}`;
-  };
-
-  const round2 = (num) =>
-    Math.round((Number(num) + Number.EPSILON) * 100) / 100;
 
   /* ---------- Load Stock with Live Auto-delete ---------- */
   useEffect(() => {
@@ -50,8 +38,7 @@ const StockScreen = () => {
       Object.entries(data).forEach(([dateKey, items]) => {
         Object.entries(items).forEach(([id, item]) => {
           if (Number(item.boxes || 0) <= 0) {
-            const itemRef = ref(db, `stocks/${dateKey}/${id}`);
-            set(itemRef, null);
+            set(ref(db, `stocks/${dateKey}/${id}`), null);
             return;
           }
 
@@ -76,47 +63,34 @@ const StockScreen = () => {
   /* ---------- Delete Stock ---------- */
   const deleteStock = (item) => {
     if (!window.confirm("Delete this stock item?")) return;
-    const delRef = ref(db, `stocks/${item.dateKey}/${item._firebaseId}`);
-    set(delRef, null);
+    set(ref(db, `stocks/${item.dateKey}/${item._firebaseId}`), null);
   };
 
   /* ---------- Filters ---------- */
   const filteredStock = stock.filter((s) => {
     const matchesCategory =
       activeCategory === "ALL" || s.category === activeCategory;
+
     const matchesSearch =
       searchQuery === "" ||
       s.productName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.category?.toLowerCase().includes(searchQuery.toLowerCase());
+
     return matchesCategory && matchesSearch;
   });
 
   /* ---------- Sorting ---------- */
   const sortedStock = [...filteredStock].sort((a, b) => {
-    let aVal, bVal;
-    if (sortConfig.key === "productName") {
-      aVal = a.productName || "";
-      bVal = b.productName || "";
-    } else if (sortConfig.key === "date") {
-      aVal = new Date(a.date).getTime();
-      bVal = new Date(b.date).getTime();
-    } else if (sortConfig.key === "totalValue") {
-      const aTotal =
-        (Number(a.boxes) * Number(a.piecesPerBox) || 0) *
-        Number(a.pricePerPiece || 0);
-      const bTotal =
-        (Number(b.boxes) * Number(b.piecesPerBox) || 0) *
-        Number(b.pricePerPiece || 0);
-      aVal = aTotal;
-      bVal = bTotal;
-    } else {
-      aVal = a[sortConfig.key] || 0;
-      bVal = b[sortConfig.key] || 0;
+    let aVal = a[sortConfig.key] || "";
+    let bVal = b[sortConfig.key] || "";
+
+    if (typeof aVal === "number") {
+      return sortConfig.direction === "asc" ? aVal - bVal : bVal - aVal;
     }
 
-    if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
-    if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
-    return 0;
+    return sortConfig.direction === "asc"
+      ? String(aVal).localeCompare(String(bVal))
+      : String(bVal).localeCompare(String(aVal));
   });
 
   const handleSort = (key) => {
@@ -148,9 +122,11 @@ const StockScreen = () => {
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
+
         <h1 className="text-xl font-semibold text-center">
           {warehouseFilter ? `${warehouseFilter} Stock` : "Stock"}
         </h1>
+
         <Button
           onClick={() => navigate("/stock/create-stock")}
           className="absolute right-0 top-1/2 -translate-y-1/2 h-9 text-sm flex items-center"
@@ -177,7 +153,7 @@ const StockScreen = () => {
       </div>
 
       {/* Search */}
-      <div className="flex justify-center gap-4">
+      <div className="flex justify-center">
         <input
           type="text"
           placeholder="Search product or category..."
@@ -192,19 +168,15 @@ const StockScreen = () => {
         <table className="w-full table-auto border border-gray-300 text-center">
           <thead>
             <tr className="bg-gray-100 text-base">
-              <th
-                className="border p-2 cursor-pointer"
-                onClick={() => handleSort("date")}
-              >
-                Date {renderSortIcon("date")}
-              </th>
               <th className="border p-2">Category</th>
+
               <th
                 className="border p-2 cursor-pointer"
                 onClick={() => handleSort("productName")}
               >
                 Product {renderSortIcon("productName")}
               </th>
+
               <th className="border p-2">Boxes</th>
               <th className="border p-2">Pcs/Box</th>
               <th className="border p-2">Warehouse</th>
@@ -215,14 +187,13 @@ const StockScreen = () => {
           <tbody>
             {sortedStock.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-6">
+                <td colSpan={6} className="p-6">
                   No stock found.
                 </td>
               </tr>
             ) : (
               sortedStock.map((item) => (
                 <tr key={item._firebaseId} className="hover:bg-gray-50">
-                  <td className="border p-2">{formatDate(item.date)}</td>
                   <td className="border p-2">{item.category}</td>
                   <td className="border p-2">{item.productName}</td>
                   <td className="border p-2">{item.boxes}</td>

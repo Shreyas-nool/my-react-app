@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, Save, ChevronsUpDown, Check } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "../../components/ui/card";
@@ -15,6 +15,7 @@ import "react-datepicker/dist/react-datepicker.css";
 
 export default function AddExpense() {
   const navigate = useNavigate();
+  const { state } = useLocation(); // get lock info from navigation
 
   const [date, setDate] = useState(new Date());
   const [amount, setAmount] = useState("");
@@ -28,6 +29,14 @@ export default function AddExpense() {
 
   const [entityOpen, setEntityOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
+
+  // Lock category/entity if coming from BankLedger
+  useEffect(() => {
+    if (state?.lockCategory && state?.lockEntity) {
+      setCategory(state.lockCategory);
+      setEntity(state.lockEntity);
+    }
+  }, [state]);
 
   // Load parties, banks, accounts
   useEffect(() => {
@@ -48,7 +57,11 @@ export default function AddExpense() {
   const renderEntityDropdown = () => (
     <Popover open={entityOpen} onOpenChange={setEntityOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="w-full justify-between">
+        <Button
+          variant="outline"
+          className="w-full justify-between"
+          disabled={!!state?.lockEntity} // lock if needed
+        >
           {entity || "-- Select --"}
           <ChevronsUpDown className="h-4 w-4 opacity-50" />
         </Button>
@@ -65,9 +78,21 @@ export default function AddExpense() {
                 return (
                   <CommandItem
                     key={name || idx}
-                    onSelect={() => { setEntity(name); setEntityOpen(false); setSearchText(""); }}
+                    onSelect={() => {
+                      if (!state?.lockEntity) { // prevent selection if locked
+                        setEntity(name);
+                        setEntityOpen(false);
+                        setSearchText("");
+                      }
+                    }}
+                    disabled={!!state?.lockEntity} // lock selection
                   >
-                    <Check className={cn("mr-2 h-4 w-4", entity === name ? "opacity-100" : "opacity-0")} />
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        entity === name ? "opacity-100" : "opacity-0"
+                      )}
+                    />
                     {name}
                   </CommandItem>
                 );
@@ -96,7 +121,7 @@ export default function AddExpense() {
     };
 
     try {
-      // 1️⃣ Determine correct base node
+      // Determine correct base node
       let baseNode = "";
       if (category === "party") baseNode = "parties";
       if (category === "account") baseNode = "accounts";
@@ -104,22 +129,22 @@ export default function AddExpense() {
 
       if (!baseNode) throw new Error("Invalid category selected");
 
-      // 2️⃣ Update balance of entity
+      // Update balance
       const balanceRef = ref(db, `${baseNode}/${entity}/balance`);
       const snap = await get(balanceRef);
       const currentBalance = snap.exists() ? Number(snap.val()) : 0;
       await set(balanceRef, currentBalance - expenseAmount);
 
-      // 3️⃣ Save expense under entity node
+      // Save expense under entity node
       const expenseRef = ref(db, `${baseNode}/${entity}/expenses/${expenseID}`);
       await set(expenseRef, expenseEntry);
 
-      // 4️⃣ Optionally, save to global expenses node
+      // Save to global expenses node
       const globalExpenseRef = ref(db, `expenses/${category}/${entity}/${expenseID}`);
       await set(globalExpenseRef, expenseEntry);
 
       alert("✅ Expense saved successfully!");
-      navigate("/expense");
+      navigate(-1);
     } catch (err) {
       console.error("Error saving expense:", err);
       alert("❌ Error saving expense");
@@ -130,7 +155,11 @@ export default function AddExpense() {
     <div className="max-w-md mx-auto mt-10 px-4 sm:px-6">
       {/* Header */}
       <header className="flex items-center justify-between border-b pb-4 mb-6">
-        <Button variant="ghost" onClick={() => navigate("/expense")} className="p-2 hover:bg-accent rounded-full">
+        <Button
+          variant="ghost"
+          onClick={() => navigate(-1)}
+          className="p-2 hover:bg-accent rounded-full"
+        >
           <ArrowLeft />
         </Button>
         <h1 className="text-xl font-semibold text-foreground/90">Add Expense</h1>
@@ -156,13 +185,21 @@ export default function AddExpense() {
 
             <div>
               <Label>Amount</Label>
-              <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              <Input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
             </div>
           </div>
 
           <div>
             <Label>Expense Done For</Label>
-            <Input type="text" value={expenseFor} onChange={(e) => setExpenseFor(e.target.value)} />
+            <Input
+              type="text"
+              value={expenseFor}
+              onChange={(e) => setExpenseFor(e.target.value)}
+            />
           </div>
 
           <div className="sm:col-span-2">
@@ -176,6 +213,7 @@ export default function AddExpense() {
                 className="w-full border p-2 rounded"
                 value={category}
                 onChange={(e) => { setCategory(e.target.value); setEntity(""); }}
+                disabled={!!state?.lockCategory} // lock if needed
               >
                 <option value="">Select Category</option>
                 <option value="party">Party</option>
