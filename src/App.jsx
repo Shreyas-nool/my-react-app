@@ -66,7 +66,7 @@ import CreateSales from "./screens/Sales/CreateSales";
 import SalesList from "./screens/Sales/";
 import PrintMultipleInvoices from "./screens/Sales/PrintMultipleInvoices";
 import ViewInvoice from "./screens/Sales/ViewInvoice";
-import SalesReport from "./screens/sales/SalesReport";
+import SalesReport from "./screens/Sales/SalesReport";
 import CategorySalesReport from "./screens/sales/CategorySalesReport";
 
 /* =========================================================
