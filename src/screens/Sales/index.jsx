@@ -7,6 +7,7 @@ import {
   Trash2,
   ChevronUp,
   ChevronDown,
+  AlertCircle,
 } from "lucide-react";
 import { db } from "../../firebase";
 import { ref, onValue, set } from "firebase/database";
@@ -205,7 +206,7 @@ const SalesScreen = () => {
 
         <Button
           onClick={() => navigate("/sales/create-sales")}
-          className="absolute right-0 top-1/2 -translate-y-1/2 h-9 text-sm"
+          className="absolute right-0 h-9 text-sm"
         >
           <Plus className="h-4 w-4 mr-2" />
           Create Sales
@@ -221,14 +222,27 @@ const SalesScreen = () => {
           onChange={(e) => setSearchQuery(e.target.value)}
           className="border border-gray-400 rounded px-3 py-2 w-64"
         />
+
+        <Button
+            size="sm"
+            onClick={() => navigate("/sales/report")}
+            className="absolute right-37.5 h-10"
+          >
+            <AlertCircle className="h-4 w-4 mr-2" />
+            Sales Report
+          </Button>
       </div>
 
+      {/* Search 
       <Button
         onClick={() => navigate("/sales/report")}
-        className="absolute right-0 top-1/2 -translate-y-1/2 h-9 text-sm"
+        className="absolute right-37.5 top-37.5 h-9 text-sm"
       >
+        <AlertCircle className="h-4 w-4 text-muted-foreground" />
         Sales Report
-      </Button>
+      </Button> */}
+
+      
 
       {/* Table */}
       <div className="overflow-x-auto">
