@@ -259,6 +259,16 @@ const PartyLedgerScreen = () => {
                   </td>
                 </tr>
               ))}
+
+              {/* CURRENT BALANCE ROW */}
+              <tr className="bg-gray-100 font-bold">
+                <td colSpan={6} className="border p-3 text-right">
+                  Current Balance
+                </td>
+                <td className={`border p-3 ${ledgerData.balance >= 0 ? "text-red-600" : "text-green-600"}`}>
+                  {ledgerData.balance.toFixed(2)}
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>

@@ -191,16 +191,18 @@ const BankLedger = () => {
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
       {/* HEADER */}
-      <div className="flex items-center gap-2 border-b pb-2">
+      <div className="flex items-center gap-2 border-b pb-2 relative">
+        {/* Back Button */}
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => navigate(-1)}
+          onClick={() => navigate("/")}
           className="h-9 w-9 p-0"
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
 
+        {/* Date Pickers */}
         <DatePicker
           selected={fromDate}
           onChange={setFromDate}
@@ -215,6 +217,15 @@ const BankLedger = () => {
           isClearable
           className="border px-2 py-1 text-sm rounded"
         />
+
+        {/* Add Purchase Button */}
+        <Button
+          size="sm"
+          className="absolute right-0 h-9"
+          onClick={() => navigate("/talha/add-purchase")} // <-- route to your add purchase page
+        >
+          + Add Purchase
+        </Button>
       </div>
 
       {/* BANK NAME */}
