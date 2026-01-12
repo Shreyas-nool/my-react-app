@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
-import { ref, onValue, off, update } from "firebase/database";
+import { ref, onValue, off, get, update } from "firebase/database";
 import { Button } from "../../components/ui/button";
 import { ArrowLeft, Plus } from "lucide-react";
 import DatePicker from "react-datepicker";
@@ -16,12 +16,34 @@ const BankLedger = () => {
 
   const [entries, setEntries] = useState([]);
   const [balance, setBalance] = useState(0);
+  const [openingBalance, setOpeningBalance] = useState(0);
   const [fromDate, setFromDate] = useState(null);
   const [toDate, setToDate] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [accountExists, setAccountExists] = useState(null); // null = loading, false = doesn't exist
 
+  // ---------------- CHECK IF ACCOUNT EXISTS ----------------
   useEffect(() => {
+    const checkAccount = async () => {
+      setLoading(true);
+      const accountSnap = await get(ref(db, `accounts/${BANK_NAME}`));
+      if (!accountSnap.exists()) {
+        setAccountExists(false); // account does not exist
+        setLoading(false);
+        return;
+      }
+      const accData = accountSnap.val();
+      setAccountExists(true);
+      setOpeningBalance(Number(accData.openingBalance || 0));
+      setLoading(false);
+    };
+    checkAccount();
+  }, []);
+
+  // ---------------- FETCH LEDGER DATA ----------------
+  useEffect(() => {
+    if (!accountExists) return; // only fetch if account exists
     setLoading(true);
 
     const purchaseRef = ref(db, `phurchase/${BANK_NAME}`);
@@ -32,12 +54,11 @@ const BankLedger = () => {
       const temp = [];
       const seen = new Set();
 
-      /* ---------- PURCHASES ---------- */
+      // ---------- PURCHASES ----------
       const purchasesSnap = await new Promise((res) =>
         onValue(purchaseRef, res, { onlyOnce: true })
       );
       const purchases = purchasesSnap.val() || {};
-
       Object.entries(purchases).forEach(([date, items]) => {
         Object.entries(items || {}).forEach(([id, p]) => {
           if (seen.has(id)) return;
@@ -53,14 +74,13 @@ const BankLedger = () => {
         });
       });
 
-      /* ---------- PAYMENTS ---------- */
+      // ---------- PAYMENTS ----------
       const paymentsSnap = await new Promise((res) =>
         onValue(paymentRef, res, { onlyOnce: true })
       );
       const payments = paymentsSnap.val() || {};
-
-      Object.entries(payments).forEach(([type, names]) => {
-        Object.entries(names || {}).forEach(([name, dates]) => {
+      Object.entries(payments).forEach(([_, names]) => {
+        Object.entries(names || {}).forEach(([__, dates]) => {
           Object.entries(dates || {}).forEach(([date, txns]) => {
             Object.entries(txns || {}).forEach(([txnId, p]) => {
               if (!p?.txnId || seen.has(p.txnId)) return;
@@ -83,13 +103,12 @@ const BankLedger = () => {
         });
       });
 
-      /* ---------- EXPENSES ---------- */
+      // ---------- EXPENSES ----------
       const expensesSnap = await new Promise((res) =>
         onValue(expenseRef, res, { onlyOnce: true })
       );
       const expenses = expensesSnap.val() || {};
-
-      Object.entries(expenses).forEach(([cat, entities]) => {
+      Object.entries(expenses).forEach(([_, entities]) => {
         Object.entries(entities || {}).forEach(([entity, items]) => {
           if (entity !== BANK_NAME) return;
           Object.entries(items || {}).forEach(([id, e]) => {
@@ -107,16 +126,15 @@ const BankLedger = () => {
         });
       });
 
-      /* ---------- SORT + RUNNING BALANCE ---------- */
+      // ---------- SORT + RUNNING BALANCE ----------
       temp.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-      let rb = 0;
+      let rb = openingBalance; // start from opening balance
       const finalEntries = temp.map((e) => {
         rb += e.amount;
         return { ...e, runningBalance: round2(rb) };
       });
-
       const finalBalance = round2(rb);
+
       setEntries(finalEntries);
       setBalance(finalBalance);
 
@@ -140,7 +158,7 @@ const BankLedger = () => {
       off(paymentRef, "value", u2);
       off(expenseRef, "value", u3);
     };
-  }, []);
+  }, [accountExists, openingBalance]);
 
   const filtered = useMemo(() => {
     return entries.filter((e) => {
@@ -158,6 +176,12 @@ const BankLedger = () => {
   );
 
   if (loading) return <div className="p-4">Loading...</div>;
+  if (!accountExists)
+    return (
+      <div className="p-4 text-center text-red-600">
+        Account "{BANK_NAME}" does not exist.
+      </div>
+    );
 
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
@@ -189,12 +213,12 @@ const BankLedger = () => {
           />
         </div>
 
-        {/* ADD EXPENSE BUTTON */}
         <Button
-          onClick={() => navigate("/expense/create-expense", {
-                      state: { lockCategory: "account", lockEntity: "Malad Payment" },
-                    })
-                  }
+          onClick={() =>
+            navigate("/expense/create-expense", {
+              state: { lockCategory: "account", lockEntity: BANK_NAME },
+            })
+          }
           className="h-9 px-3 flex items-center gap-1"
         >
           <Plus className="h-4 w-4" />
@@ -221,6 +245,21 @@ const BankLedger = () => {
             </tr>
           </thead>
           <tbody>
+            {/* OPENING BALANCE */}
+            <tr className="bg-gray-100 font-bold">
+              <td colSpan={5} className="border p-3 text-right">
+                Opening Balance
+              </td>
+              <td
+                className={`border p-3 ${
+                  openingBalance >= 0 ? "text-green-600" : "text-red-600"
+                }`}
+              >
+                {openingBalance.toFixed(2)}
+              </td>
+            </tr>
+
+            {/* LEDGER ENTRIES */}
             {pageData.length === 0 ? (
               <tr>
                 <td colSpan={6} className="p-6">
@@ -254,6 +293,7 @@ const BankLedger = () => {
               ))
             )}
 
+            {/* CURRENT BALANCE */}
             <tr className="bg-gray-100 font-bold">
               <td colSpan={5} className="border p-3 text-right">
                 Current Balance

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
+import { useNavigate } from "react-router-dom";
 
 import { Button } from "../../components/ui/button";
 import { useProfileMutation } from "../../slices/userApiSlice";
@@ -15,7 +16,10 @@ const ProfileScreen = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  const [openingBalances, setOpeningBalances] = useState({}); // <-- Track opening balances
+
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { userInfo } = useSelector((state) => state.auth);
 
   const [updateProfile, { isLoading }] = useProfileMutation();
@@ -30,11 +34,12 @@ const ProfileScreen = () => {
 
   useEffect(() => {
     if (userInfo) {
-      setName(userInfo.name);
-      setEmail(userInfo.email);
+      setName(userInfo?.name || "");
+      setEmail(userInfo?.email || "");
     }
   }, [userInfo]);
 
+  /* ---------- Update Profile ---------- */
   const submitHandler = async (e) => {
     e.preventDefault();
 
@@ -57,11 +62,14 @@ const ProfileScreen = () => {
     }
   };
 
-  // --------------------------------------------
-  // CREATE DEFAULT ACCOUNT IN FIREBASE
-  // --------------------------------------------
-  const createAccount = async (accountName) => {
+  /* ---------- Create Account with Opening Balance ---------- */
+  const createAccount = async (accountName, openingBalance = 0) => {
     try {
+      if (openingBalance < 0) {
+        toast.error("Opening balance cannot be negative");
+        return;
+      }
+
       const accountRef = ref(db, `accounts/${accountName}`);
       const snapshot = await get(accountRef);
 
@@ -73,14 +81,15 @@ const ProfileScreen = () => {
       await set(accountRef, {
         name: accountName,
         type: "account",
-        balance: 0,
+        balance: openingBalance,
+        openingBalance: openingBalance,
         createdAt: new Date().toISOString(),
         entries: {
           expenses: {},
         },
       });
 
-      toast.success(`${accountName} account created`);
+      toast.success(`${accountName} account created with balance ${openingBalance}`);
     } catch (error) {
       console.error(error);
       toast.error("Failed to create account");
@@ -164,26 +173,79 @@ const ProfileScreen = () => {
           </div>
         </form>
 
-        {/* CREATE DEFAULT ACCOUNTS */}
+        {/* CREATE DEFAULT ACCOUNTS WITH OPENING BALANCE 
         <div className="mt-16 border-t border-slate-900/10 pt-10">
           <h2 className="text-lg font-semibold text-slate-900">
             Create Default Accounts
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Click to create predefined system accounts in the database.
+            Click to create predefined system accounts with opening balance.
           </p>
 
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="mt-6 flex flex-wrap gap-3 items-center">
             {DEFAULT_ACCOUNTS.map((account) => (
-              <Button
-                key={account}
-                type="button"
-                variant="outline"
-                onClick={() => createAccount(account)}
-              >
-                Create {account}
-              </Button>
+              <div key={account} className="flex items-center gap-2">
+                <input
+                  type="number"
+                  placeholder="Opening Balance"
+                  min="0"
+                  className="w-28 border px-2 py-1 rounded"
+                  value={openingBalances[account] || ""}
+                  onChange={(e) =>
+                    setOpeningBalances((prev) => ({
+                      ...prev,
+                      [account]: e.target.value,
+                    }))
+                  }
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    createAccount(account, Number(openingBalances[account] || 0))
+                  }
+                >
+                  Create {account}
+                </Button>
+              </div>
             ))}
+          </div>
+        </div>
+        */}
+
+        {/* ADMIN / DEVELOPER OPTIONS */}
+        <div className="mt-16 border-t border-slate-900/10 pt-10">
+          <h2 className="text-lg font-semibold text-slate-900">
+            System Options
+          </h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Advanced configuration and management tools.
+          </p>
+
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button
+              onClick={() => navigate("/developer-options")}
+              className="rounded-lg border border-slate-300 p-6 text-left hover:border-indigo-600 hover:bg-indigo-50 transition"
+            >
+              <h3 className="text-lg font-semibold text-slate-900">
+                Developer Options
+              </h3>
+              <p className="mt-1 text-sm text-slate-600">
+                Debug tools, experimental features, and system settings.
+              </p>
+            </button>
+
+            <button
+              onClick={() => navigate("/admin")}
+              className="rounded-lg border border-slate-300 p-6 text-left hover:border-red-600 hover:bg-red-50 transition"
+            >
+              <h3 className="text-lg font-semibold text-slate-900">
+                Admin Panel
+              </h3>
+              <p className="mt-1 text-sm text-slate-600">
+                User management, permissions, and system controls.
+              </p>
+            </button>
           </div>
         </div>
       </div>

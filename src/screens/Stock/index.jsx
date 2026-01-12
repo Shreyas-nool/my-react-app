@@ -110,6 +110,13 @@ const StockScreen = () => {
     );
   };
 
+  /* ---------- Total Boxes ---------- */
+  const totalBoxes = sortedStock.reduce(
+    (sum, item) => sum + Number(item.boxes || 0),
+    0
+  );
+
+
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
       {/* Header */}
@@ -212,6 +219,18 @@ const StockScreen = () => {
               ))
             )}
           </tbody>
+          <tfoot>
+            <tr className="bg-gray-100 font-semibold">
+              <td className="border p-2 text-right" colSpan={2}>
+                Total
+              </td>
+              <td className="border p-2">
+                {totalBoxes}
+              </td>
+              <td className="border p-2" colSpan={3}></td>
+            </tr>
+          </tfoot>
+
         </table>
       </div>
     </div>

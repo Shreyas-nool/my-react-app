@@ -31,6 +31,12 @@ import AddProduct from "./screens/product/AddProduct";
 import Party from "./screens/Party";
 import AddParty from "./screens/Party/AddParty";
 
+// Admin – Profile
+import PartyManagement from "./screens/Profile/admin/PartyManagement";
+import AdminPanel from "./screens/Profile/admin/AdminPanel";
+import BankManagement from "./screens/Profile/admin/BankManagement";
+import DefaultAccounts from "./screens/Profile/admin/DefaultAccounts";
+
 /* =========================================================
    BANK MODULE
    ========================================================= */
@@ -136,6 +142,12 @@ const router = createBrowserRouter([
         errorElement: <ErrorScreen />,
         children: [
           { path: "/", element: <HomeScreen /> },
+
+          /* ---------- ADMIN ---------- */
+          { path: "/admin/party-management", element: <PartyManagement />},
+          { path: "admin", element: <AdminPanel /> },
+          { path: "admin/bank-management", element: <BankManagement /> },
+          { path: "admin/default-accounts", element: <DefaultAccounts />},
 
           /* ---------- PRODUCT ---------- */
           { path: "/product", element: <Product /> },

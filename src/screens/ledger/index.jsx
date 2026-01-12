@@ -16,6 +16,14 @@ export default function Ledger() {
     direction: "asc", // ✅ A–Z by default
   });
 
+  // ---------- PAGINATION ----------
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 15;
+
+  useEffect(() => {
+    setCurrentPage(1); // Reset page on search change
+  }, [searchQuery]);
+
   /* ---------- Fetch Parties ---------- */
   useEffect(() => {
     const partiesRef = ref(db, "parties");
@@ -45,7 +53,7 @@ export default function Ledger() {
     if (!q) return true; // show all if search is empty
 
     return (
-      p.partyName.toLowerCase().startsWith(q) || // ✅ match start of name
+      p.partyName.toLowerCase().startsWith(q) || 
       p.city.toLowerCase().startsWith(q)
     );
   });
@@ -77,6 +85,13 @@ export default function Ledger() {
     );
   };
 
+  // ---------- PAGINATION SLICE ----------
+  const totalPages = Math.ceil(sortedParties.length / rowsPerPage);
+  const paginatedParties = sortedParties.slice(
+    (currentPage - 1) * rowsPerPage,
+    currentPage * rowsPerPage
+  );
+
   // Total money yet to collect (sum of positive balances)
   const totalReceivable = parties
     .filter((p) => p.balance > 0)
@@ -85,18 +100,16 @@ export default function Ledger() {
   // Total advance (sum of negative balances)
   const totalAdvance = parties
     .filter((p) => p.balance < 0)
-    .reduce((sum, p) => sum + p.balance, 0); // will be negative
+    .reduce((sum, p) => sum + p.balance, 0);
 
   // Net Receivable
-  const netReceivable = totalReceivable + totalAdvance; 
-  // adding a negative advance reduces the net
+  const netReceivable = totalReceivable + totalAdvance;
 
   /* ---------- UI ---------- */
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
       {/* Header */}
       <div className="relative border-b pb-2 flex items-center justify-center">
-        {/* Back button */}
         <Button
           variant="ghost"
           size="sm"
@@ -106,12 +119,10 @@ export default function Ledger() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
 
-        {/* Title */}
         <h1 className="text-xl font-semibold text-center">
           Party Ledger Summary
         </h1>
 
-        {/* Net Receivable on the right */}
         <div className="absolute right-0 top-1/2 -translate-y-1/2 text-lg font-semibold">
           Net Receivable:{" "}
           <span className={`${netReceivable >= 0 ? "text-red-600" : "text-green-600"}`}>
@@ -155,29 +166,23 @@ export default function Ledger() {
           </thead>
 
           <tbody>
-            {sortedParties.length === 0 ? (
+            {paginatedParties.length === 0 ? (
               <tr>
                 <td colSpan={3} className="p-6">
                   No parties found.
                 </td>
               </tr>
             ) : (
-              sortedParties.map((party) => (
+              paginatedParties.map((party) => (
                 <tr
                   key={party.partyId}
                   className="hover:bg-gray-50 cursor-pointer text-base"
                   onClick={() =>
-                    navigate(`/ledger/${party.partyId}`, {
-                      state: { party },
-                    })
+                    navigate(`/ledger/${party.partyId}`, { state: { party } })
                   }
                 >
-                  <td className="border p-4 font-medium">
-                    {party.partyName}
-                  </td>
-
+                  <td className="border p-4 font-medium">{party.partyName}</td>
                   <td className="border p-4">{party.city}</td>
-
                   <td
                     className={`border p-4 font-semibold ${
                       party.balance >= 0 ? "text-red-600" : "text-green-600"
@@ -191,17 +196,32 @@ export default function Ledger() {
           </tbody>
         </table>
 
-        {/*
-        <div className="flex justify-end gap-6 mb-2 text-lg font-semibold">
-          <div>
-            Total Receivable: <span className="text-red-600">{format2(totalReceivable)}</span>
-          </div>
-          <div>
-            Total Advance: <span className="text-green-600">{format2(totalAdvance)}</span>
-          </div>
-        </div>
-          */}
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center gap-4 mt-4">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => p - 1)}
+            >
+              Prev
+            </Button>
 
+            <span className="text-sm font-medium">
+              Page {currentPage} of {totalPages}
+            </span>
+
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
