@@ -371,9 +371,9 @@ const SalesInvoice = () => {
     .map(p => ({ ...p, name: (p.name || "").trim() }))
     .sort((a, b) => a.name.localeCompare(b.name))
     .filter(p => {
-      const name = (p.name || "").toUpperCase();
+      const combined = `${p.name} ${p.id}`.toUpperCase();
       const search = (partySearchText || "").trim().toUpperCase();
-      return search === "" || name.startsWith(search);
+      return search === "" || combined.includes(search);
     });
 
   const filteredCategories = Array.from(
@@ -392,11 +392,14 @@ const SalesInvoice = () => {
   const filteredStocks =
     selectedCategory && selectedWarehouseName
       ? stocks.filter(s => {
-          const productName = (s.productName || "").toUpperCase();
+          const combined = `${s.productName} ${s.id}`.toUpperCase();
           const search = (productSearchText || "").trim().toUpperCase();
-          return s.category === selectedCategory &&
-                 s.warehouse === selectedWarehouseName &&
-                 (search === "" || productName.startsWith(search));
+
+          return (
+            s.category === selectedCategory &&
+            s.warehouse === selectedWarehouseName &&
+            (search === "" || combined.includes(search))
+          );
         })
       : [];
 
@@ -519,13 +522,26 @@ const SalesInvoice = () => {
                 <CommandList>
                   <CommandEmpty>No warehouse found.</CommandEmpty>
                   {warehouses
-                    .filter(w => (w.name || "").toLowerCase().startsWith(warehouseSearchText.toLowerCase()))
+                    .filter(w =>
+                      (w.name || "")
+                        .toLowerCase()
+                        .includes(warehouseSearchText.toLowerCase())
+                    )
                     .map((w, i) => (
-                      <CommandItem key={i} value={w.id} onSelect={() => { setSelectedWarehouseId(w.id); setWarehouseOpen(false); }}>
-                        <Check className={cn("mr-2 h-4 w-4", selectedWarehouseId === w.id ? "opacity-100" : "opacity-0")} />
+                      <CommandItem
+                        key={i}
+                        onSelect={() => {
+                          setSelectedWarehouseId(w.id);
+                          setWarehouseOpen(false);
+                        }}
+                      >
+                        <Check className={cn(
+                          "mr-2 h-4 w-4",
+                          selectedWarehouseId === w.id ? "opacity-100" : "opacity-0"
+                        )} />
                         {w.name}
                       </CommandItem>
-                    ))}
+                  ))}
                 </CommandList>
               </Command>
             </PopoverContent>
@@ -558,7 +574,7 @@ const SalesInvoice = () => {
                         .filter(Boolean)
                     )
                   )
-                    .filter(cat => cat.toLowerCase().startsWith(categorySearchText.toLowerCase()))
+                    .filter(cat => cat.toLowerCase().includes(categorySearchText.toLowerCase()))
                     .map((cat, i) => (
                       <CommandItem key={i} onSelect={() => { setSelectedCategory(cat); setSelectedStock(null); setCategoryOpen(false); }}>
                         {cat}

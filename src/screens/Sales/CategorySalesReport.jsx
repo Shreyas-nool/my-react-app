@@ -5,6 +5,16 @@ import { db } from "../../firebase";
 import { Button } from "../../components/ui/button";
 import { ArrowLeft } from "lucide-react";
 
+/* =======================
+   Numeric Helpers (same logic everywhere)
+======================= */
+const round2 = (n) =>
+  Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+
+const toNum = (v) => Number(v) || 0;
+
+const format2 = (n) => Number(n).toFixed(2);
+
 const CategorySalesReport = () => {
   const navigate = useNavigate();
   const { state } = useLocation();
@@ -14,10 +24,12 @@ const CategorySalesReport = () => {
   const [tableData, setTableData] = useState([]);
   const [partyMap, setPartyMap] = useState({});
 
-  // Fetch party names
+  /* =======================
+     Fetch Party Names
+  ======================= */
   useEffect(() => {
     const partiesRef = ref(db, "parties");
-    onValue(partiesRef, (snap) => {
+    const unsub = onValue(partiesRef, (snap) => {
       const data = snap.val() || {};
       const map = {};
       Object.entries(data).forEach(([id, party]) => {
@@ -25,9 +37,13 @@ const CategorySalesReport = () => {
       });
       setPartyMap(map);
     });
+
+    return () => unsub();
   }, []);
 
-  // Fetch sales data
+  /* =======================
+     Fetch Sales Data
+  ======================= */
   useEffect(() => {
     if (!category || !date) return;
 
@@ -47,40 +63,60 @@ const CategorySalesReport = () => {
 
       Object.values(data).forEach((timestampNode) => {
         Object.values(timestampNode).forEach((invoice) => {
-          const invoiceDateStr = new Date(invoice.createdAt).toISOString().slice(0, 10);
+          const invoiceDateStr = new Date(invoice.createdAt)
+            .toISOString()
+            .slice(0, 10);
+
           if (invoiceDateStr !== selectedDateStr) return;
 
-          const filteredItems = (invoice.items || []).filter(item => item.category === category);
+          const filteredItems = (invoice.items || []).filter(
+            (item) => item.category === category
+          );
+
           if (filteredItems.length === 0) return;
 
-          filteredItems.forEach(item => productsSet.add(item.productName));
+          filteredItems.forEach((item) =>
+            productsSet.add(item.productName)
+          );
 
-          // Group items by product & price
+          /* Group by product → price */
           const productGroups = {};
-          filteredItems.forEach(item => {
-            if (!productGroups[item.productName]) productGroups[item.productName] = {};
-            const key = Number(item.pricePerItem); // ensure number
-            if (!productGroups[item.productName][key]) productGroups[item.productName][key] = 0;
-            productGroups[item.productName][key] += Number(item.box);
+          filteredItems.forEach((item) => {
+            const prod = item.productName;
+            const price = toNum(item.pricePerItem);
+            const box = toNum(item.box);
+
+            if (!productGroups[prod]) productGroups[prod] = {};
+            if (!productGroups[prod][price]) productGroups[prod][price] = 0;
+
+            productGroups[prod][price] += box;
           });
 
-          // Determine max rows needed for stacking
           const maxRows = Math.max(
-            ...Object.values(productGroups).map(priceMap => Object.keys(priceMap).length)
+            ...Object.values(productGroups).map(
+              (priceMap) => Object.keys(priceMap).length
+            )
           );
 
           for (let i = 0; i < maxRows; i++) {
             const row = {
               invoiceNumber: invoice.invoiceNumber,
               partyName: partyMap[invoice.partyId] || invoice.partyId,
-              products: {}
+              products: {},
             };
 
-            Object.keys(productGroups).forEach(prod => {
-              // sort prices ascending
-              const prices = Object.entries(productGroups[prod])
-                .sort(([a], [b]) => a - b); 
-              row.products[prod] = prices[i] ? `${prices[i][1]} / ${prices[i][0]}` : "-";
+            Object.keys(productGroups).forEach((prod) => {
+              const prices = Object.entries(productGroups[prod]).sort(
+                ([a], [b]) => a - b
+              );
+
+              row.products[prod] = prices[i]
+                ? {
+                    box: toNum(prices[i][1]),
+                    price: toNum(prices[i][0]),
+                    display: `${prices[i][1]} / ${prices[i][0]}`,
+                  }
+                : null;
             });
 
             tempData.push(row);
@@ -95,19 +131,22 @@ const CategorySalesReport = () => {
     return () => unsub();
   }, [category, date, partyMap]);
 
-  // Compute totals per product
+  /* =======================
+     Totals (Numeric Safe)
+  ======================= */
   const totals = {};
-  productList.forEach(prod => {
-    totals[prod] = tableData.reduce((sum, row) => {
-      const val = row.products[prod];
-      if (val && val !== "-") {
-        const box = Number(val.split(" / ")[0]);
-        return sum + box;
-      }
-      return sum;
-    }, 0);
+  productList.forEach((prod) => {
+    totals[prod] = round2(
+      tableData.reduce((sum, row) => {
+        const cell = row.products[prod];
+        return sum + (cell ? toNum(cell.box) : 0);
+      }, 0)
+    );
   });
 
+  /* =======================
+     UI
+  ======================= */
   return (
     <div className="max-w-7xl mx-auto mt-10 p-4 space-y-4">
       {/* Header */}
@@ -132,7 +171,9 @@ const CategorySalesReport = () => {
               <th className="border p-3">Invoice</th>
               <th className="border p-3">Party</th>
               {productList.map((p) => (
-                <th key={p} className="border p-3">{p}</th>
+                <th key={p} className="border p-3">
+                  {p}
+                </th>
               ))}
             </tr>
           </thead>
@@ -140,7 +181,10 @@ const CategorySalesReport = () => {
           <tbody>
             {tableData.length === 0 ? (
               <tr>
-                <td colSpan={productList.length + 2} className="p-6">
+                <td
+                  colSpan={productList.length + 2}
+                  className="p-6"
+                >
                   No data for selected category and date
                 </td>
               </tr>
@@ -152,26 +196,40 @@ const CategorySalesReport = () => {
                       <button
                         className="text-blue-600 underline"
                         onClick={() =>
-                          navigate("/sales/view-invoice", { state: { invoiceNumber: row.invoiceNumber } })
+                          navigate("/sales/view-invoice", {
+                            state: {
+                              invoiceNumber: row.invoiceNumber,
+                            },
+                          })
                         }
                       >
                         {row.invoiceNumber}
                       </button>
                     </td>
-                    <td className="border p-3 font-medium">{row.partyName}</td>
+                    <td className="border p-3 font-medium">
+                      {row.partyName}
+                    </td>
+
                     {productList.map((prod) => (
-                      <td key={prod} className="border p-3">{row.products[prod]}</td>
+                      <td key={prod} className="border p-3">
+                        {row.products[prod]?.display || "-"}
+                      </td>
                     ))}
                   </tr>
                 ))}
 
-                {/* Totals row */}
+                {/* Totals */}
                 <tr className="bg-gray-200 font-semibold">
-                  <td className="border p-3 text-right" colSpan={2}>
+                  <td
+                    colSpan={2}
+                    className="border p-3 text-right"
+                  >
                     Total Boxes:
                   </td>
-                  {productList.map(prod => (
-                    <td key={prod} className="border p-3">{totals[prod]}</td>
+                  {productList.map((prod) => (
+                    <td key={prod} className="border p-3">
+                      {totals[prod]}
+                    </td>
                   ))}
                 </tr>
               </>
