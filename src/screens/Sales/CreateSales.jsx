@@ -78,6 +78,9 @@ const SalesInvoice = () => {
   const [createdAt, setCreatedAt] = useState(new Date());
   const [stockWarning, setStockWarning] = useState("");
 
+  // TEMP STOCK (session-only)
+  const [tempStock, setTempStock] = useState({});
+
   // Derived names for display
   const selectedPartyName =
     parties.find((p) => p.id === selectedPartyId)?.name || "";
@@ -97,6 +100,21 @@ const SalesInvoice = () => {
         });
       });
       setStocks(stockItems);
+
+      // initialize temp stock
+      const temp = {};
+      stockItems.forEach((s) => {
+        const totalPieces =
+          (Number(s.boxes) || 0) * (Number(s.piecesPerBox) || 1) +
+          (Number(s.pieces) || 0);
+
+        temp[s.id] = {
+          availablePieces: totalPieces,
+          piecesPerBox: Number(s.piecesPerBox) || 1,
+        };
+      });
+
+      setTempStock(prev => Object.keys(prev).length ? prev : temp);
     });
 
     const partiesRef = ref(db, "parties");
@@ -121,6 +139,7 @@ const SalesInvoice = () => {
   // Pre-fill invoice if editing
   useEffect(() => {
     if (invoiceToEdit) {
+      // 1️⃣ Set basic fields
       setSelectedPartyId(invoiceToEdit.partyId || "");
       setItems(invoiceToEdit.items || []);
       setSubtotal(invoiceToEdit.subtotal || invoiceToEdit.total || 0);
@@ -130,6 +149,24 @@ const SalesInvoice = () => {
       setSelectedWarehouseId(invoiceToEdit.warehouseId || "");
       if (invoiceToEdit.items?.[0]?.category)
         setSelectedCategory(invoiceToEdit.items[0].category);
+
+      // 2️⃣ Adjust temp stock for already-added items (VERY IMPORTANT)
+      if (invoiceToEdit.items?.length) {
+        setTempStock(prev => {
+          const updated = { ...prev };
+
+          invoiceToEdit.items.forEach(item => {
+            if (updated[item.stockId]) {
+              const usedPieces =
+                Number(item.box) * Number(item.piecesPerBox);
+
+              updated[item.stockId].availablePieces -= usedPieces;
+            }
+          });
+
+          return updated;
+        });
+      }
     }
   }, [invoiceToEdit]);
 
@@ -143,33 +180,68 @@ const SalesInvoice = () => {
   };
 
   const handleAddItem = () => {
-    if (!selectedPartyId) return alert("Please select a party before adding items.");
-    if (!selectedWarehouseId) return alert("Please select a warehouse before adding items.");
+    if (!selectedPartyId)
+      return alert("Please select a party before adding items.");
+    if (!selectedWarehouseId)
+      return alert("Please select a warehouse before adding items.");
     if (!selectedStock || !box || !piecesPerBox || pricePerItem === "")
       return alert("Please fill all fields.");
 
-    const totalStockPieces = (Number(selectedStock.boxes) || 0) * (Number(selectedStock.piecesPerBox) || 1);
+    const stockId = selectedStock.id;
+    const temp = tempStock[stockId];
+
+    if (!temp) {
+      setStockWarning("Stock not available.");
+      return;
+    }
+
     const desiredPieces = Number(box) * Number(piecesPerBox);
-    if (desiredPieces > totalStockPieces) return alert(`Cannot add! Only ${totalStockPieces} pieces available.`);
+
+    // ✅ BOX-BASED CHECK (NOT PIECES MESSAGE)
+    const availableBoxes = Math.floor(
+      temp.availablePieces / Number(piecesPerBox || 1)
+    );
+
+    if (Number(box) > availableBoxes) {
+      setStockWarning(`Cannot add! Only ${availableBoxes} boxes available.`);
+      return;
+    }
 
     const totalItem = round2(desiredPieces * Number(pricePerItem));
 
-    const existingIndex = items.findIndex(item =>
-      item.productName === selectedStock.productName &&
-      item.piecesPerBox === Number(piecesPerBox) &&
-      item.pricePerItem === Number(pricePerItem)
+    const existingIndex = items.findIndex(
+      (item) =>
+        item.productName === selectedStock.productName &&
+        item.piecesPerBox === Number(piecesPerBox) &&
+        item.pricePerItem === Number(pricePerItem)
     );
+
+    // ✅ TEMP STOCK DEDUCTION (CORE FIX)
+    setTempStock((prev) => ({
+      ...prev,
+      [stockId]: {
+        ...prev[stockId],
+        availablePieces: prev[stockId].availablePieces - desiredPieces,
+      },
+    }));
 
     if (existingIndex !== -1) {
       const updatedItems = items.map((item, idx) => {
         if (idx === existingIndex) {
           const newBoxCount = item.box + Number(box);
-          return { ...item, box: newBoxCount, total: round2(newBoxCount * item.piecesPerBox * item.pricePerItem) };
+          return {
+            ...item,
+            box: newBoxCount,
+            total: round2(
+              newBoxCount * item.piecesPerBox * item.pricePerItem
+            ),
+          };
         }
         return item;
       });
+
       setItems(updatedItems);
-      setSubtotal(prev => round2(prev + totalItem));
+      setSubtotal((prev) => round2(prev + totalItem));
     } else {
       const newItem = {
         partyId: selectedPartyId,
@@ -180,11 +252,12 @@ const SalesInvoice = () => {
         piecesPerBox: Number(piecesPerBox),
         pricePerItem: Number(pricePerItem),
         total: totalItem,
-        stockId: selectedStock.id,
+        stockId: stockId,
         dateKey: selectedStock.dateKey,
       };
+
       setItems([...items, newItem]);
-      setSubtotal(prev => round2(prev + totalItem));
+      setSubtotal((prev) => round2(prev + totalItem));
     }
 
     setSelectedStock(null);
@@ -194,23 +267,61 @@ const SalesInvoice = () => {
     setStockWarning("");
   };
 
+
   const handleDeleteItem = (index) => {
     const itemToDelete = items[index];
-    setItems(items.filter((_, i) => i !== index));
-    setSubtotal(prev => round2(prev - (Number(itemToDelete.total) || 0)));
+    if (!itemToDelete) return;
+
+    const restoredPieces =
+      Number(itemToDelete.box) * Number(itemToDelete.piecesPerBox);
+
+    // ✅ RESTORE TEMP STOCK
+    setTempStock((prev) => {
+      if (!prev[itemToDelete.stockId]) return prev;
+
+      return {
+        ...prev,
+        [itemToDelete.stockId]: {
+          ...prev[itemToDelete.stockId],
+          availablePieces:
+            prev[itemToDelete.stockId].availablePieces + restoredPieces,
+        },
+      };
+    });
+
+    // ✅ REMOVE ITEM
+    setItems((prev) => prev.filter((_, i) => i !== index));
+
+    // ✅ UPDATE SUBTOTAL
+    setSubtotal((prev) =>
+      round2(prev - (Number(itemToDelete.total) || 0))
+    );
   };
 
   const updateStockAfterSale = async (saleItems) => {
     for (const item of saleItems) {
       const stockRef = ref(db, `stocks/${item.dateKey}/${item.stockId}`);
+
       await runTransaction(stockRef, (current) => {
         if (!current) return current;
-        let totalPiecesStock = (Number(current.boxes) || 0) * (Number(current.piecesPerBox) || 1);
-        const soldPieces = (Number(item.box) || 0) * (Number(item.piecesPerBox) || 0);
-        totalPiecesStock -= soldPieces;
-        const updatedBoxes = Math.floor(totalPiecesStock / (Number(current.piecesPerBox) || 1));
-        const updatedPieces = totalPiecesStock % (Number(current.piecesPerBox) || 1);
-        return { ...current, boxes: updatedBoxes, pieces: updatedPieces };
+
+        const piecesPerBox = Number(current.piecesPerBox) || 1;
+
+        const totalPieces =
+          (Number(current.boxes) || 0) * piecesPerBox +
+          (Number(current.pieces) || 0);
+
+        const soldPieces =
+          Number(item.box || 0) * Number(item.piecesPerBox || 0);
+
+        const remainingPieces = totalPieces - soldPieces;
+        if (remainingPieces < 0) return current;
+
+        return {
+          ...current,
+          boxes: Math.floor(remainingPieces / piecesPerBox),
+          pieces: remainingPieces % piecesPerBox,
+        };
       });
     }
   };
@@ -507,7 +618,12 @@ const SalesInvoice = () => {
       </div>
 
       <div className="flex justify-end mt-2">
-        <Button className="bg-primary" onClick={handleAddItem}>Add to Invoice</Button>
+        <Button 
+        className="bg-primary"
+        onClick={handleAddItem}
+        >
+          Add to Invoice
+          </Button>
       </div>
 
       {/* ITEMS TABLE */}

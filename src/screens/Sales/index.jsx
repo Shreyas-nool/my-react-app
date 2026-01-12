@@ -10,7 +10,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { db } from "../../firebase";
-import { ref, onValue, set } from "firebase/database";
+import { ref, onValue, set, runTransaction } from "firebase/database";
 
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -182,10 +182,72 @@ const SalesScreen = () => {
   };
 
   /* ---------- Delete ---------- */
-  const deleteInvoice = (sale) => {
+  const deleteInvoice = async (sale) => {
     if (!window.confirm("Delete this invoice?")) return;
-    const delRef = ref(db, `sales/${sale._dateKey}/${sale._invoiceKey}`);
-    set(delRef, null);
+
+    try {
+      // 1️⃣ Restore stock first
+      for (const item of sale.items) {
+        const stockRef = ref(db, `stocks/${item.dateKey}/${item.stockId}`);
+
+        await runTransaction(stockRef, (current) => {
+          if (!current) return current;
+
+          const piecesPerBox = Number(current.piecesPerBox) || 1;
+          const soldPieces = Number(item.box || 0) * piecesPerBox;
+
+          const currentTotalPieces =
+            (Number(current.boxes) || 0) * piecesPerBox +
+            (Number(current.pieces) || 0);
+
+          const newTotalPieces = currentTotalPieces + soldPieces;
+
+          return {
+            ...current,
+            boxes: Math.floor(newTotalPieces / piecesPerBox),
+            pieces: newTotalPieces % piecesPerBox,
+          };
+        });
+      }
+
+      // 2️⃣ Delete the sale
+      const delRef = ref(db, `sales/${sale._dateKey}/${sale._invoiceKey}`);
+      await set(delRef, null);
+
+      alert("Sale deleted and stock restored!");
+    } catch (err) {
+      console.error(err);
+      alert("Error deleting sale.");
+    }
+  };
+
+  const restoreStockAfterSaleDeletion = async (sale) => {
+    if (!sale?.items) return;
+
+    for (const item of sale.items) {
+      const stockRef = ref(db, `stocks/${item.dateKey}/${item.stockId}`);
+
+      await runTransaction(stockRef, (current) => {
+        if (!current) return current;
+
+        const piecesPerBox = Number(current.piecesPerBox) || 1;
+
+        // Current total pieces in DB
+        const totalPieces =
+          (Number(current.boxes) || 0) * piecesPerBox +
+          (Number(current.pieces) || 0);
+
+        // Add back the deleted sale's pieces
+        const restoredPieces = Number(item.box) * Number(item.piecesPerBox || 0);
+        const newTotal = totalPieces + restoredPieces;
+
+        return {
+          ...current,
+          boxes: Math.floor(newTotal / piecesPerBox),
+          pieces: newTotal % piecesPerBox,
+        };
+      });
+    }
   };
 
   /* ---------- UI ---------- */
