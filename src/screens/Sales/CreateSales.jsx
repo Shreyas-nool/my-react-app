@@ -1,8 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
-import { Popover, PopoverTrigger, PopoverContent } from "../../components/ui/popover";
-import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from "../../components/ui/command";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "../../components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandItem,
+  CommandEmpty,
+} from "../../components/ui/command";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -24,7 +34,8 @@ const formatToISO = (dateObj) => {
 };
 
 // Round to 2 decimals safely
-const round2 = (num) => Math.round((Number(num) + Number.EPSILON) * 100) / 100;
+const round2 = (num) =>
+  Math.round((Number(num) + Number.EPSILON) * 100) / 100;
 const formatPrice = (value) => {
   const v = Number(value || 0);
   return v !== 0 && v < 0.01 ? v.toFixed(4) : v.toFixed(2);
@@ -35,29 +46,45 @@ const SalesInvoice = () => {
   const location = useLocation();
   const invoiceToEdit = location.state;
 
+  // Stocks, Parties, Warehouses
   const [stocks, setStocks] = useState([]);
   const [parties, setParties] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
-  const [selectedPartyId, setSelectedPartyId] = useState("");
-  const [partyOpen, setPartyOpen] = useState(false);
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
-  const [warehouseOpen, setWarehouseOpen] = useState(false);
 
+  // Selected IDs
+  const [selectedPartyId, setSelectedPartyId] = useState("");
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
-  const [categoryOpen, setCategoryOpen] = useState(false);
   const [selectedStock, setSelectedStock] = useState(null);
+
+  // Popover open states
+  const [partyOpen, setPartyOpen] = useState(false);
+  const [warehouseOpen, setWarehouseOpen] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
 
+  // Search text for filtering
+  const [partySearchText, setPartySearchText] = useState("");
+  const [warehouseSearchText, setWarehouseSearchText] = useState("");
+  const [categorySearchText, setCategorySearchText] = useState("");
+  const [productSearchText, setProductSearchText] = useState("");
+
+  // Item input fields
   const [box, setBox] = useState("");
   const [piecesPerBox, setPiecesPerBox] = useState("");
   const [pricePerItem, setPricePerItem] = useState("");
   const [items, setItems] = useState([]);
   const [subtotal, setSubtotal] = useState(0);
   const [createdAt, setCreatedAt] = useState(new Date());
-  const [searchText, setSearchText] = useState("");
   const [stockWarning, setStockWarning] = useState("");
 
-  // Fetch stocks, parties & warehouses live
+  // Derived names for display
+  const selectedPartyName =
+    parties.find((p) => p.id === selectedPartyId)?.name || "";
+  const selectedWarehouseName =
+    warehouses.find((w) => w.id === selectedWarehouseId)?.name || "";
+
+  // Fetch stocks, parties, warehouses live
   useEffect(() => {
     const stocksRef = ref(db, "stocks");
     onValue(stocksRef, (snapshot) => {
@@ -76,27 +103,20 @@ const SalesInvoice = () => {
     onValue(partiesRef, (snapshot) => {
       const data = snapshot.val();
       if (!data) return setParties([]);
-      setParties(Object.entries(data).map(([id, details]) => ({ id, ...details })));
+      setParties(
+        Object.entries(data).map(([id, details]) => ({ id, ...details }))
+      );
     });
 
-    // Line 63-70 (replace the previous warehouse fetch)
-    const warehousesRef = ref(db, "warehouse"); // ✅ correct path
+    const warehousesRef = ref(db, "warehouse");
     onValue(warehousesRef, (snapshot) => {
       const data = snapshot.val();
       if (!data) return setWarehouses([]);
-      setWarehouses(Object.entries(data).map(([id, details]) => ({ id, ...details })));
+      setWarehouses(
+        Object.entries(data).map(([id, details]) => ({ id, ...details }))
+      );
     });
   }, []);
-
-                const selectedPartyObj = parties.find(
-                  p => p.id === selectedPartyId
-                );
-                const selectedPartyName = selectedPartyObj?.name || "";
-
-                const selectedWarehouseObj = warehouses.find(
-                  w => w.id === selectedWarehouseId
-                );
-                const selectedWarehouseName = selectedWarehouseObj?.name || "";
 
   // Pre-fill invoice if editing
   useEffect(() => {
@@ -104,9 +124,12 @@ const SalesInvoice = () => {
       setSelectedPartyId(invoiceToEdit.partyId || "");
       setItems(invoiceToEdit.items || []);
       setSubtotal(invoiceToEdit.subtotal || invoiceToEdit.total || 0);
-      setCreatedAt(invoiceToEdit.createdAt ? new Date(invoiceToEdit.createdAt) : new Date());
-      setSelectedWarehouseId(invoiceToEdit.warehouseId || ""); // prefill warehouse
-      if (invoiceToEdit.items?.[0]?.category) setSelectedCategory(invoiceToEdit.items[0].category);
+      setCreatedAt(
+        invoiceToEdit.createdAt ? new Date(invoiceToEdit.createdAt) : new Date()
+      );
+      setSelectedWarehouseId(invoiceToEdit.warehouseId || "");
+      if (invoiceToEdit.items?.[0]?.category)
+        setSelectedCategory(invoiceToEdit.items[0].category);
     }
   }, [invoiceToEdit]);
 
@@ -122,7 +145,8 @@ const SalesInvoice = () => {
   const handleAddItem = () => {
     if (!selectedPartyId) return alert("Please select a party before adding items.");
     if (!selectedWarehouseId) return alert("Please select a warehouse before adding items.");
-    if (!selectedStock || !box || !piecesPerBox || pricePerItem === "") return alert("Please fill all fields.");
+    if (!selectedStock || !box || !piecesPerBox || pricePerItem === "")
+      return alert("Please fill all fields.");
 
     const totalStockPieces = (Number(selectedStock.boxes) || 0) * (Number(selectedStock.piecesPerBox) || 1);
     const desiredPieces = Number(box) * Number(piecesPerBox);
@@ -130,7 +154,6 @@ const SalesInvoice = () => {
 
     const totalItem = round2(desiredPieces * Number(pricePerItem));
 
-    // Check if same product already exists with same piecesPerBox and pricePerItem
     const existingIndex = items.findIndex(item =>
       item.productName === selectedStock.productName &&
       item.piecesPerBox === Number(piecesPerBox) &&
@@ -138,22 +161,16 @@ const SalesInvoice = () => {
     );
 
     if (existingIndex !== -1) {
-      // Merge boxes if same product, pieces per box, and price
       const updatedItems = items.map((item, idx) => {
         if (idx === existingIndex) {
           const newBoxCount = item.box + Number(box);
-          return {
-            ...item,
-            box: newBoxCount,
-            total: round2(newBoxCount * item.piecesPerBox * item.pricePerItem),
-          };
+          return { ...item, box: newBoxCount, total: round2(newBoxCount * item.piecesPerBox * item.pricePerItem) };
         }
         return item;
       });
       setItems(updatedItems);
       setSubtotal(prev => round2(prev + totalItem));
     } else {
-      // Add as new item
       const newItem = {
         partyId: selectedPartyId,
         warehouseId: selectedWarehouseId,
@@ -170,7 +187,6 @@ const SalesInvoice = () => {
       setSubtotal(prev => round2(prev + totalItem));
     }
 
-    // Reset selection
     setSelectedStock(null);
     setBox("");
     setPiecesPerBox("");
@@ -221,7 +237,7 @@ const SalesInvoice = () => {
       const saleData = {
         createdAt: isoDateTime,
         partyId: selectedPartyId,
-        warehouseId: selectedWarehouseId, // save warehouse
+        warehouseId: selectedWarehouseId,
         items,
         subtotal,
         total: subtotal,
@@ -239,29 +255,55 @@ const SalesInvoice = () => {
     }
   };
 
-  // Filter stocks based on selected category AND selected warehouse
+  // FILTERED LISTS (CASE-INSENSITIVE)
+  const filteredParties = parties
+    .map(p => ({ ...p, name: (p.name || "").trim() }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .filter(p => {
+      const name = (p.name || "").toUpperCase();
+      const search = (partySearchText || "").trim().toUpperCase();
+      return search === "" || name.startsWith(search);
+    });
+
+  const filteredCategories = Array.from(
+    new Set(
+      stocks
+        .filter(s => s.warehouse === selectedWarehouseName)
+        .map(s => s.category)
+        .filter(Boolean)
+    )
+  ).filter(cat => {
+    const name = (cat || "").toUpperCase();
+    const search = (categorySearchText || "").trim().toUpperCase();
+    return search === "" || name.startsWith(search);
+  });
+
   const filteredStocks =
-  selectedCategory && selectedWarehouseName
-    ? stocks.filter(
-        s =>
-          s.category === selectedCategory &&
-          s.warehouse === selectedWarehouseName
-      )
-    : [];
+    selectedCategory && selectedWarehouseName
+      ? stocks.filter(s => {
+          const productName = (s.productName || "").toUpperCase();
+          const search = (productSearchText || "").trim().toUpperCase();
+          return s.category === selectedCategory &&
+                 s.warehouse === selectedWarehouseName &&
+                 (search === "" || productName.startsWith(search));
+        })
+      : [];
 
+  const totalBoxes = items.reduce((sum, item) => sum + Number(item.box || 0), 0);
 
-  const totalBoxes = items.reduce(
-    (sum, item) => sum + Number(item.box || 0),
-    0
-  );
-
+  // --- RENDERING (same as before, just use filteredParties, filteredCategories, filteredStocks) ---
 
 
   return (
     <div className="max-w-6xl mx-auto p-6 mt-10 space-y-6">
       {/* HEADER */}
       <header className="flex items-center justify-between py-2 sm:py-3 border-b border-border/50">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/sales")} className="h-8 w-8 sm:h-9 sm:w-9 p-0 sm:p-2 hover:bg-accent">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/sales")}
+          className="h-8 w-8 sm:h-9 sm:w-9 p-0 sm:p-2 hover:bg-accent"
+        >
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1 text-center">
@@ -289,24 +331,44 @@ const SalesInvoice = () => {
               </Button>
             </PopoverTrigger>
             <PopoverContent className="p-0 w-[260px]">
-              <Command>
-                <CommandInput placeholder="Search party..." onValueChange={setSearchText} />
+              <Command shouldFilter={false}>
+                <CommandInput
+                  placeholder="Type first letter..."
+                  value={partySearchText}
+                  onValueChange={setPartySearchText}
+                />
                 <CommandList>
                   <CommandEmpty>No party found.</CommandEmpty>
-                  {parties.filter(p => (p.name || "").toLowerCase().includes((searchText || "").toLowerCase()))
+                  {parties
+                    .map(p => ({ ...p, name: (p.name || "").trim() })) // trim spaces
+                    .sort((a, b) => a.name.localeCompare(b.name))       // sort A→Z
+                    .filter(p => {
+                      const name = p.name.toUpperCase();               // party name in uppercase
+                      const search = (partySearchText || "").trim().toUpperCase(); // input in uppercase
+                      return search === "" || name.startsWith(search); // match multiple letters
+                    })
                     .map((p, i) => (
                       <CommandItem
                         key={i}
                         value={p.id}
                         onSelect={() => {
-                          if (items.length === 0) { setSelectedPartyId(p.id); setPartyOpen(false); }
-                          else alert("Party cannot be changed after adding items.");
+                          if (items.length === 0) {
+                            setSelectedPartyId(p.id);
+                            setPartyOpen(false);
+                          } else {
+                            alert("Party cannot be changed after adding items.");
+                          }
                         }}
                       >
-                        <Check className={cn("mr-2 h-4 w-4", selectedPartyId === p.id ? "opacity-100" : "opacity-0")} />
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            selectedPartyId === p.id ? "opacity-100" : "opacity-0"
+                          )}
+                        />
                         {p.name}
                       </CommandItem>
-                    ))}
+                  ))}
                 </CommandList>
               </Command>
             </PopoverContent>
@@ -334,18 +396,19 @@ const SalesInvoice = () => {
               <Button
                 variant="outline"
                 className="w-full justify-between px-3"
-                disabled={items.length > 0} // lock after items
+                disabled={items.length > 0}
               >
                 {selectedWarehouseName || "-- Select Warehouse --"}
                 <ChevronsUpDown className="h-4 w-4 opacity-50" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="p-0 w-[260px]">
-              <Command>
-                <CommandInput placeholder="Search warehouse..." onValueChange={setSearchText} />
+              <Command shouldFilter={false}>
+                <CommandInput placeholder="Search warehouse..." onValueChange={setWarehouseSearchText} />
                 <CommandList>
                   <CommandEmpty>No warehouse found.</CommandEmpty>
-                  {warehouses.filter(w => (w.name || "").toLowerCase().includes((searchText || "").toLowerCase()))
+                  {warehouses
+                    .filter(w => (w.name || "").toLowerCase().startsWith(warehouseSearchText.toLowerCase()))
                     .map((w, i) => (
                       <CommandItem key={i} value={w.id} onSelect={() => { setSelectedWarehouseId(w.id); setWarehouseOpen(false); }}>
                         <Check className={cn("mr-2 h-4 w-4", selectedWarehouseId === w.id ? "opacity-100" : "opacity-0")} />
@@ -359,9 +422,9 @@ const SalesInvoice = () => {
         </div>
       </div>
 
-      {/* Category & Product */}
+      {/* CATEGORY & PRODUCT */}
       <div className="flex gap-3 mt-4 items-end w-full">
-        {/* Category */}
+        {/* CATEGORY */}
         <div className="flex flex-col gap-1 w-full">
           <label className="text-sm font-medium">Category</label>
           <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
@@ -372,30 +435,31 @@ const SalesInvoice = () => {
               </Button>
             </PopoverTrigger>
             <PopoverContent className="p-0 w-[260px]">
-              <Command>
-                <CommandEmpty>No category found.</CommandEmpty>
-                {Array.from(
-                  new Set(
-                    stocks
-                      .filter(
-                        s =>
-                          selectedWarehouseName &&
-                          s.warehouse === selectedWarehouseName
-                      )
-                      .map(s => s.category)
-                      .filter(Boolean)
+              <Command shouldFilter={false}>
+                <CommandInput placeholder="Search category..." onValueChange={setCategorySearchText} />
+                <CommandList>
+                  <CommandEmpty>No category found.</CommandEmpty>
+                  {Array.from(
+                    new Set(
+                      stocks
+                        .filter(s => s.warehouse === selectedWarehouseName)
+                        .map(s => s.category)
+                        .filter(Boolean)
+                    )
                   )
-                ).map((cat, i) => (
-                  <CommandItem key={i} onSelect={() => { setSelectedCategory(cat); setSelectedStock(null); setCategoryOpen(false); }}>
-                    {cat}
-                  </CommandItem>
-                ))}
+                    .filter(cat => cat.toLowerCase().startsWith(categorySearchText.toLowerCase()))
+                    .map((cat, i) => (
+                      <CommandItem key={i} onSelect={() => { setSelectedCategory(cat); setSelectedStock(null); setCategoryOpen(false); }}>
+                        {cat}
+                      </CommandItem>
+                    ))}
+                </CommandList>
               </Command>
             </PopoverContent>
           </Popover>
         </div>
 
-        {/* Product */}
+        {/* PRODUCT */}
         <div className="flex flex-col gap-1 w-full">
           <label className="text-sm font-medium">Product</label>
           <Popover open={productOpen} onOpenChange={setProductOpen}>
@@ -406,32 +470,15 @@ const SalesInvoice = () => {
               </Button>
             </PopoverTrigger>
             <PopoverContent className="p-0 w-[260px]">
-              <Command>
-                <CommandInput placeholder="Search product..." onValueChange={setSearchText} />
+              <Command shouldFilter={false}>
+                <CommandInput placeholder="Search product..." onValueChange={setProductSearchText} />
                 <CommandList>
                   <CommandEmpty>No product found.</CommandEmpty>
-                  {filteredStocks
-                    .filter(s =>
-                      (s.productName || "")
-                        .toLowerCase()
-                        .includes((searchText || "").toLowerCase())
-                    )
-                    .map((s) => (
-                      <CommandItem
-                        key={s.id}
-                        value={s.id}
-                        onSelect={() => {
-                          handleSelectStock(s);
-                        }}
-                      >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            selectedStock?.id === s.id ? "opacity-100" : "opacity-0"
-                          )}
-                        />
-                        {s.productName}
-                      </CommandItem>
+                  {filteredStocks.map(s => (
+                    <CommandItem key={s.id} value={s.id} onSelect={() => handleSelectStock(s)}>
+                      <Check className={cn("mr-2 h-4 w-4", selectedStock?.id === s.id ? "opacity-100" : "opacity-0")} />
+                      {s.productName}
+                    </CommandItem>
                   ))}
                 </CommandList>
               </Command>
@@ -439,20 +486,20 @@ const SalesInvoice = () => {
           </Popover>
         </div>
 
-        {/* Box */}
+        {/* BOX */}
         <div className="flex flex-col gap-1 w-full">
           <label className="text-sm font-medium">Box</label>
           <Input type="number" value={box} onChange={(e) => setBox(e.target.value)} />
           {stockWarning && <p className="text-red-500 text-xs mt-1">{stockWarning}</p>}
         </div>
 
-        {/* Pieces/Box */}
+        {/* PIECES PER BOX */}
         <div className="flex flex-col gap-1 w-full">
           <label className="text-sm font-medium">Pieces/Box</label>
           <Input type="number" value={piecesPerBox} readOnly className="bg-slate-100" />
         </div>
 
-        {/* Price */}
+        {/* PRICE PER ITEM */}
         <div className="flex flex-col gap-1 w-full">
           <label className="text-sm font-medium">Price/Item</label>
           <Input type="number" step="0.01" value={pricePerItem} onChange={(e) => setPricePerItem(e.target.value)} />
@@ -463,7 +510,7 @@ const SalesInvoice = () => {
         <Button className="bg-primary" onClick={handleAddItem}>Add to Invoice</Button>
       </div>
 
-      {/* Items Table */}
+      {/* ITEMS TABLE */}
       <div className="overflow-x-auto bg-white p-4 rounded-xl shadow-sm border mt-4">
         <table className="w-full border text-sm text-center">
           <thead className="bg-gray-100">
@@ -520,4 +567,3 @@ const SalesInvoice = () => {
 };
 
 export default SalesInvoice;
-
