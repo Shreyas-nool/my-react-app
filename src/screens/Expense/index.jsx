@@ -12,8 +12,11 @@ const ExpenseScreen = () => {
 
   const [expenses, setExpenses] = useState([]);
   const [filtered, setFiltered] = useState([]);
+
   const [fromDate, setFromDate] = useState(null);
   const [toDate, setToDate] = useState(null);
+  const [searchText, setSearchText] = useState("");
+
   const [total, setTotal] = useState(0);
 
   /* ---------------- FETCH EXPENSES ---------------- */
@@ -26,7 +29,8 @@ const ExpenseScreen = () => {
 
       Object.entries(data).forEach(([category, entities]) => {
         Object.entries(entities || {}).forEach(([entity, items]) => {
-          if (entity === "Malad Payment") return; // ❌ skip Malad Payment
+          if (entity === "Malad Payment") return;
+
           Object.entries(items || {}).forEach(([id, exp]) => {
             all.push({
               ...exp,
@@ -44,21 +48,30 @@ const ExpenseScreen = () => {
     });
   }, []);
 
-  /* ---------------- DATE FILTER ---------------- */
+  /* ---------------- FILTER (DATE + SEARCH) ---------------- */
   useEffect(() => {
     let data = [...expenses];
 
-    if (fromDate)
+    if (fromDate) {
       data = data.filter((e) => new Date(e.date) >= fromDate);
+    }
 
-    if (toDate)
+    if (toDate) {
       data = data.filter((e) => new Date(e.date) <= toDate);
+    }
+
+    if (searchText.trim()) {
+      const search = searchText.toLowerCase();
+      data = data.filter((e) =>
+        (e.expenseFor || "").toLowerCase().includes(search)
+      );
+    }
 
     setFiltered(data);
 
-    const sum = data.reduce((acc, cur) => acc + Number(cur.amount), 0);
+    const sum = data.reduce((acc, cur) => acc + Number(cur.amount || 0), 0);
     setTotal(sum);
-  }, [fromDate, toDate, expenses]);
+  }, [fromDate, toDate, searchText, expenses]);
 
   /* ---------------- DELETE ---------------- */
   const handleDelete = async (exp) => {
@@ -70,47 +83,65 @@ const ExpenseScreen = () => {
     <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
 
       {/* HEADER */}
-      <div className="relative flex items-center border-b pb-2">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/")}
-            className="h-9 w-9 p-0"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+      <div className="relative flex flex-wrap gap-2 items-center border-b pb-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/")}
+          className="h-9 w-9 p-0"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
 
-          <DatePicker
-            selected={fromDate}
-            onChange={setFromDate}
-            placeholderText="From"
-            className="border rounded px-2 py-1 text-sm"
-            isClearable
-          />
-          <DatePicker
-            selected={toDate}
-            onChange={setToDate}
-            placeholderText="To"
-            className="border rounded px-2 py-1 text-sm"
-            isClearable
-          />
-        </div>
+        <DatePicker
+          selected={fromDate}
+          onChange={setFromDate}
+          placeholderText="From"
+          className="border rounded px-2 py-1 text-sm"
+          isClearable
+        />
+
+        <DatePicker
+          selected={toDate}
+          onChange={setToDate}
+          placeholderText="To"
+          className="border rounded px-2 py-1 text-sm"
+          isClearable
+        />
 
         <Button
-          className="absolute right-0 top-1/2 -translate-y-1/2 h-9 text-sm"
+          className="ml-auto h-9 text-sm"
           onClick={() => navigate("/expense/create-expense")}
         >
           Add Expense
         </Button>
       </div>
 
-      {/* TITLE + TOTAL */}
-      <div className="w-full text-center space-y-1">
-        <h2 className="text-xl font-semibold">Expenses</h2>
-        <p className="text-red-600 font-semibold">
-          Total: {total.toFixed(2)}
-        </p>
+      {/* TITLE + TOTAL (CENTER) + SEARCH (RIGHT) */}
+      <div className="grid grid-cols-3 items-center w-full">
+
+        {/* LEFT EMPTY (BALANCE COLUMN) */}
+        <div />
+
+        {/* CENTER TITLE + TOTAL */}
+        <div className="text-center">
+          <h2 className="text-xl font-semibold">Expenses</h2>
+          <p className="text-red-600 font-semibold">
+            Total: {total.toFixed(2)}
+          </p>
+        </div>
+
+        {/* RIGHT SEARCH */}
+        <div className="flex justify-end">
+          <input
+            type="text"
+            placeholder="Search expense for..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            className="border rounded px-3 py-2 text-sm w-64"
+          />
+        </div>
+
       </div>
 
       {/* TABLE */}

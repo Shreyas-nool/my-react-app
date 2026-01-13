@@ -6,7 +6,7 @@ import { Button } from "../../components/ui/button";
 import { ArrowLeft } from "lucide-react";
 
 /* =======================
-   Numeric Helpers (same logic everywhere)
+   Numeric Helpers (GLOBAL STANDARD)
 ======================= */
 const round2 = (n) =>
   Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -25,10 +25,11 @@ const CategorySalesReport = () => {
   const [partyMap, setPartyMap] = useState({});
 
   /* =======================
-     Fetch Party Names
+     FETCH PARTY NAMES
   ======================= */
   useEffect(() => {
     const partiesRef = ref(db, "parties");
+
     const unsub = onValue(partiesRef, (snap) => {
       const data = snap.val() || {};
       const map = {};
@@ -42,7 +43,7 @@ const CategorySalesReport = () => {
   }, []);
 
   /* =======================
-     Fetch Sales Data
+     FETCH SALES DATA
   ======================= */
   useEffect(() => {
     if (!category || !date) return;
@@ -79,8 +80,11 @@ const CategorySalesReport = () => {
             productsSet.add(item.productName)
           );
 
-          /* Group by product → price */
+          /* =======================
+             GROUP: PRODUCT → PRICE
+          ======================= */
           const productGroups = {};
+
           filteredItems.forEach((item) => {
             const prod = item.productName;
             const price = toNum(item.pricePerItem);
@@ -114,7 +118,8 @@ const CategorySalesReport = () => {
                 ? {
                     box: toNum(prices[i][1]),
                     price: toNum(prices[i][0]),
-                    display: `${prices[i][1]} / ${prices[i][0]}`,
+                    // ✅ DECIMAL FORMATTED PRICE
+                    display: `${prices[i][1]} / ${format2(prices[i][0])}`,
                   }
                 : null;
             });
@@ -132,7 +137,7 @@ const CategorySalesReport = () => {
   }, [category, date, partyMap]);
 
   /* =======================
-     Totals (Numeric Safe)
+     TOTALS (BOX COUNT)
   ======================= */
   const totals = {};
   productList.forEach((prod) => {
@@ -149,7 +154,7 @@ const CategorySalesReport = () => {
   ======================= */
   return (
     <div className="max-w-7xl mx-auto mt-10 p-4 space-y-4">
-      {/* Header */}
+      {/* HEADER */}
       <div className="relative border-b pb-2 flex items-center justify-center">
         <Button
           variant="ghost"
@@ -163,7 +168,7 @@ const CategorySalesReport = () => {
         <h1 className="text-xl font-semibold">{category}</h1>
       </div>
 
-      {/* Table */}
+      {/* TABLE */}
       <div className="overflow-x-auto">
         <table className="w-full border text-center">
           <thead className="bg-gray-100">
@@ -181,10 +186,7 @@ const CategorySalesReport = () => {
           <tbody>
             {tableData.length === 0 ? (
               <tr>
-                <td
-                  colSpan={productList.length + 2}
-                  className="p-6"
-                >
+                <td colSpan={productList.length + 2} className="p-6">
                   No data for selected category and date
                 </td>
               </tr>
@@ -197,15 +199,14 @@ const CategorySalesReport = () => {
                         className="text-blue-600 underline"
                         onClick={() =>
                           navigate("/sales/view-invoice", {
-                            state: {
-                              invoiceNumber: row.invoiceNumber,
-                            },
+                            state: { invoiceNumber: row.invoiceNumber },
                           })
                         }
                       >
                         {row.invoiceNumber}
                       </button>
                     </td>
+
                     <td className="border p-3 font-medium">
                       {row.partyName}
                     </td>
@@ -218,12 +219,9 @@ const CategorySalesReport = () => {
                   </tr>
                 ))}
 
-                {/* Totals */}
+                {/* TOTALS ROW */}
                 <tr className="bg-gray-200 font-semibold">
-                  <td
-                    colSpan={2}
-                    className="border p-3 text-right"
-                  >
+                  <td colSpan={2} className="border p-3 text-right">
                     Total Boxes:
                   </td>
                   {productList.map((prod) => (

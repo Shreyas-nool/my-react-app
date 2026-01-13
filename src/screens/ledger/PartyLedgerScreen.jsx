@@ -248,7 +248,24 @@ const PartyLedgerScreen = () => {
                 <tr key={idx}>
                   <td className="border p-3">{formatDate(t.date)}</td>
                   <td className="border p-3">{t.type}</td>
-                  <td className="border p-3">{t.invoice}</td>
+                  <td className="border p-3">
+                    {t.invoice !== "-" ? (
+                      <button
+                        className="text-blue-600 underline hover:text-blue-800"
+                        onClick={() =>
+                          navigate("/sales/view-invoice", {
+                            state: {
+                              invoiceNumber: t.invoice,
+                            },
+                          })
+                        }
+                      >
+                        {t.invoice}
+                      </button>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
                   <td className="border p-3">{t.source}</td>
                   <td className="border p-3">{t.notes}</td>
                   <td className={`border p-3 ${t.amount >= 0 ? "text-red-600" : "text-green-600"}`}>

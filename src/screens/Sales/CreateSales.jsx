@@ -392,8 +392,13 @@ const SalesInvoice = () => {
   const filteredStocks =
     selectedCategory && selectedWarehouseName
       ? stocks.filter(s => {
-          const combined = `${s.productName} ${s.id}`.toUpperCase();
-          const search = (productSearchText || "").trim().toUpperCase();
+          const normalize = (str = "") =>
+  str
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, ""); // remove spaces, dots, brackets, symbols
+
+const combined = normalize(`${s.productName} ${s.id}`);
+const search = normalize(productSearchText);
 
           return (
             s.category === selectedCategory &&
