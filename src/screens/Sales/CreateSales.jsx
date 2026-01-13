@@ -331,22 +331,28 @@ const SalesInvoice = () => {
     if (!selectedWarehouseId) return alert("Please select a warehouse.");
     if (items.length === 0) return alert("Add items first.");
 
-    const isoDateTime = formatToISO(createdAt);
-
     try {
       let invoiceNumber = invoiceToEdit?.invoiceNumber;
       let saleRef;
+
       if (invoiceToEdit) {
-        saleRef = ref(db, `sales/${isoDateTime}/invoice-${invoiceNumber}`);
+        // ✅ EDITING EXISTING INVOICE
+        // Use the original Firebase path, do NOT change based on date
+        const originalIsoDateTime = invoiceToEdit.createdAt; // original path key
+        saleRef = ref(db, `sales/${originalIsoDateTime}/invoice-${invoiceNumber}`);
       } else {
+        // ✅ CREATING NEW INVOICE
+        // Generate new invoice number
         const counterRef = ref(db, "invoiceCounter");
         const counterRes = await runTransaction(counterRef, (current) => (Number(current) || 1000) + 1);
         invoiceNumber = counterRes.snapshot.val();
+        const isoDateTime = formatToISO(createdAt);
         saleRef = ref(db, `sales/${isoDateTime}/invoice-${invoiceNumber}`);
       }
 
+      // Build sale data
       const saleData = {
-        createdAt: isoDateTime,
+        createdAt: formatToISO(createdAt), // update date even if changed
         partyId: selectedPartyId,
         warehouseId: selectedWarehouseId,
         items,
@@ -355,10 +361,20 @@ const SalesInvoice = () => {
         invoiceNumber,
       };
 
+      // Save to Firebase
       await set(saleRef, saleData);
-      if (!invoiceToEdit) await updateStockAfterSale(items);
 
-      alert(invoiceToEdit ? `Invoice updated! Invoice No: ${invoiceNumber}` : `Sale saved! Invoice No: ${invoiceNumber}`);
+      // Update stock only if this is a NEW invoice
+      if (!invoiceToEdit) {
+        await updateStockAfterSale(items);
+      }
+
+      alert(
+        invoiceToEdit
+          ? `Invoice updated! Invoice No: ${invoiceNumber}`
+          : `Sale saved! Invoice No: ${invoiceNumber}`
+      );
+
       navigate("/sales");
     } catch (err) {
       console.error(err);
@@ -393,12 +409,12 @@ const SalesInvoice = () => {
     selectedCategory && selectedWarehouseName
       ? stocks.filter(s => {
           const normalize = (str = "") =>
-  str
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, ""); // remove spaces, dots, brackets, symbols
+    str
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, ""); // remove spaces, dots, brackets, symbols
 
-const combined = normalize(`${s.productName} ${s.id}`);
-const search = normalize(productSearchText);
+        const combined = normalize(`${s.productName} ${s.id}`);
+        const search = normalize(productSearchText);
 
           return (
             s.category === selectedCategory &&

@@ -20,6 +20,8 @@ const ITEMS_PER_PAGE = 20;
 const SalesScreen = () => {
   const navigate = useNavigate();
 
+  const [fromDate, setFromDate] = useState(null);
+  const [toDate, setToDate] = useState(null);
   const [sales, setSales] = useState([]);
   const [partiesMap, setPartiesMap] = useState({});
   const [warehousesMap, setWarehousesMap] = useState({});
@@ -51,7 +53,6 @@ const SalesScreen = () => {
         setSales([]);
         return;
       }
-
       const arr = [];
       Object.entries(data).forEach(([dateKey, invoices]) => {
         Object.entries(invoices).forEach(([invoiceKey, sale]) => {
@@ -62,10 +63,8 @@ const SalesScreen = () => {
           });
         });
       });
-
       setSales(arr);
     });
-
     return () => unsub();
   }, []);
 
@@ -78,7 +77,6 @@ const SalesScreen = () => {
         setPartiesMap({});
         return;
       }
-
       const map = {};
       Object.entries(data).forEach(([id, details]) => {
         map[id] = {
@@ -86,10 +84,8 @@ const SalesScreen = () => {
           city: details.city || "-",
         };
       });
-
       setPartiesMap(map);
     });
-
     return () => unsub();
   }, []);
 
@@ -102,15 +98,12 @@ const SalesScreen = () => {
         setWarehousesMap({});
         return;
       }
-
       const map = {};
       Object.entries(data).forEach(([id, details]) => {
         map[id] = details.name || "-";
       });
-
       setWarehousesMap(map);
     });
-
     return () => unsub();
   }, []);
 
@@ -118,6 +111,18 @@ const SalesScreen = () => {
   const filteredSales = sales.filter((sale) => {
     const q = searchQuery.toLowerCase();
     const party = partiesMap[sale.partyId] || {};
+
+    const saleDate = new Date(sale.createdAt);
+    if (fromDate) {
+      const f = new Date(fromDate);
+      f.setHours(0, 0, 0, 0);
+      if (saleDate < f) return false;
+    }
+    if (toDate) {
+      const t = new Date(toDate);
+      t.setHours(23, 59, 59, 999);
+      if (saleDate > t) return false;
+    }
 
     return (
       sale.invoiceNumber?.toString().includes(q) ||
@@ -129,7 +134,6 @@ const SalesScreen = () => {
   /* ---------- Sorting ---------- */
   const sortedSales = [...filteredSales].sort((a, b) => {
     let aVal, bVal;
-
     if (sortConfig.key === "party") {
       aVal = partiesMap[a.partyId]?.name || "";
       bVal = partiesMap[b.partyId]?.name || "";
@@ -143,7 +147,6 @@ const SalesScreen = () => {
       aVal = a[sortConfig.key];
       bVal = b[sortConfig.key];
     }
-
     if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
     if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
     return 0;
@@ -151,17 +154,23 @@ const SalesScreen = () => {
 
   /* ---------- Pagination ---------- */
   const totalPages = Math.ceil(sortedSales.length / ITEMS_PER_PAGE);
-
   const paginatedSales = sortedSales.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
 
   useEffect(() => {
-    if (totalPages > 0) {
-      setCurrentPage(totalPages);
-    }
+    if (currentPage > totalPages) setCurrentPage(totalPages || 1);
   }, [totalPages]);
+
+  /* ---------- Totals ---------- */
+  const filteredTotal = round2(
+    sortedSales.reduce(
+      (sum, sale) =>
+        sum + sale.items.reduce((s, i) => s + Number(i.total || 0), 0),
+      0
+    )
+  );
 
   /* ---------- Sort UI ---------- */
   const handleSort = (key) => {
@@ -186,22 +195,16 @@ const SalesScreen = () => {
     if (!window.confirm("Delete this invoice?")) return;
 
     try {
-      // 1️⃣ Restore stock first
       for (const item of sale.items) {
         const stockRef = ref(db, `stocks/${item.dateKey}/${item.stockId}`);
-
         await runTransaction(stockRef, (current) => {
           if (!current) return current;
-
           const piecesPerBox = Number(current.piecesPerBox) || 1;
           const soldPieces = Number(item.box || 0) * piecesPerBox;
-
           const currentTotalPieces =
             (Number(current.boxes) || 0) * piecesPerBox +
             (Number(current.pieces) || 0);
-
           const newTotalPieces = currentTotalPieces + soldPieces;
-
           return {
             ...current,
             boxes: Math.floor(newTotalPieces / piecesPerBox),
@@ -210,7 +213,6 @@ const SalesScreen = () => {
         });
       }
 
-      // 2️⃣ Delete the sale
       const delRef = ref(db, `sales/${sale._dateKey}/${sale._invoiceKey}`);
       await set(delRef, null);
 
@@ -218,35 +220,6 @@ const SalesScreen = () => {
     } catch (err) {
       console.error(err);
       alert("Error deleting sale.");
-    }
-  };
-
-  const restoreStockAfterSaleDeletion = async (sale) => {
-    if (!sale?.items) return;
-
-    for (const item of sale.items) {
-      const stockRef = ref(db, `stocks/${item.dateKey}/${item.stockId}`);
-
-      await runTransaction(stockRef, (current) => {
-        if (!current) return current;
-
-        const piecesPerBox = Number(current.piecesPerBox) || 1;
-
-        // Current total pieces in DB
-        const totalPieces =
-          (Number(current.boxes) || 0) * piecesPerBox +
-          (Number(current.pieces) || 0);
-
-        // Add back the deleted sale's pieces
-        const restoredPieces = Number(item.box) * Number(item.piecesPerBox || 0);
-        const newTotal = totalPieces + restoredPieces;
-
-        return {
-          ...current,
-          boxes: Math.floor(newTotal / piecesPerBox),
-          pieces: newTotal % piecesPerBox,
-        };
-      });
     }
   };
 
@@ -264,6 +237,27 @@ const SalesScreen = () => {
           <ArrowLeft className="h-4 w-4" />
         </Button>
 
+        {/* Date Pickers */}
+        <div className="absolute left-12 top-1/2 -translate-y-1/2 flex gap-2">
+          <DatePicker
+            selected={fromDate}
+            onChange={(date) => setFromDate(date)}
+            placeholderText="From Date"
+            dateFormat="dd/MM/yyyy"
+            className="border rounded px-2 py-1 text-sm w-28"
+            maxDate={toDate || new Date()}
+          />
+          <DatePicker
+            selected={toDate}
+            onChange={(date) => setToDate(date)}
+            placeholderText="To Date"
+            dateFormat="dd/MM/yyyy"
+            className="border rounded px-2 py-1 text-sm w-28"
+            minDate={fromDate}
+            maxDate={new Date()}
+          />
+        </div>
+
         <h1 className="text-xl font-semibold">Sales Invoices</h1>
 
         <Button
@@ -276,7 +270,7 @@ const SalesScreen = () => {
       </div>
 
       {/* Search */}
-      <div className="flex justify-center">
+      <div className="flex justify-center relative">
         <input
           type="text"
           placeholder="Search invoices..."
@@ -286,25 +280,14 @@ const SalesScreen = () => {
         />
 
         <Button
-            size="sm"
-            onClick={() => navigate("/sales/report")}
-            className="absolute right-37.5 h-10"
-          >
-            <AlertCircle className="h-4 w-4 mr-2" />
-            Sales Report
-          </Button>
+          size="sm"
+          onClick={() => navigate("/sales/report")}
+          className="absolute right-0 h-10"
+        >
+          <AlertCircle className="h-4 w-4 mr-2" />
+          Sales Report
+        </Button>
       </div>
-
-      {/* Search 
-      <Button
-        onClick={() => navigate("/sales/report")}
-        className="absolute right-37.5 top-37.5 h-9 text-sm"
-      >
-        <AlertCircle className="h-4 w-4 text-muted-foreground" />
-        Sales Report
-      </Button> */}
-
-      
 
       {/* Table */}
       <div className="overflow-x-auto">
@@ -346,10 +329,7 @@ const SalesScreen = () => {
             ) : (
               paginatedSales.map((sale) => {
                 const totalAmount = round2(
-                  sale.items.reduce(
-                    (sum, item) => sum + Number(item.total || 0),
-                    0
-                  )
+                  sale.items.reduce((sum, item) => sum + Number(item.total || 0), 0)
                 );
 
                 const party = partiesMap[sale.partyId] || {};
@@ -357,9 +337,7 @@ const SalesScreen = () => {
 
                 return (
                   <tr key={sale._invoiceKey} className="hover:bg-gray-50">
-                    <td className="border p-3">
-                      {formatDate(sale.createdAt)}
-                    </td>
+                    <td className="border p-3">{formatDate(sale.createdAt)}</td>
                     <td className="border p-3">
                       <button
                         className="text-blue-600 underline"
@@ -388,6 +366,19 @@ const SalesScreen = () => {
               })
             )}
           </tbody>
+
+          {/* Footer Total */}
+          {paginatedSales.length > 0 && (
+            <tfoot>
+              <tr className="bg-gray-100 font-semibold">
+                <td colSpan={5} className="border p-3 text-right">
+                  Total Amount:
+                </td>
+                <td className="border p-3">{filteredTotal.toFixed(2)}</td>
+                <td className="border p-3"></td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 

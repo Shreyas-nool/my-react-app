@@ -218,6 +218,7 @@ export default function ViewInvoice() {
         @media print {
           body * {
             visibility: hidden !important;
+            margin: 0;
           }
 
           .print-area,
