@@ -6,7 +6,6 @@ import { Button } from "../../components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { useReactToPrint } from "react-to-print";
 
 const BankLedgerScreen = () => {
   const { bankId } = useParams();
@@ -43,17 +42,19 @@ const BankLedgerScreen = () => {
         const openingBalance = round2(Number(bank.openingBalance || 0));
         const createdAt = bank.createdAt;
 
-        const transactions = [];
+        let transactions = [];
         const usedKeys = new Set();
 
-        // Opening balance
+        // Opening balance row
         transactions.push({
-          type: "Old Balance",
+          id: "opening",
+          type: "Opening Balance",
           date: createdAt,
           source: "-",
           notes: "Opening balance",
           amount: openingBalance,
           createdAt: Number(createdAt) || Date.now(),
+          isOpening: true, // Flag to identify opening row
         });
 
         // EXPENSES
@@ -66,6 +67,7 @@ const BankLedgerScreen = () => {
               if (usedKeys.has(key)) return;
               usedKeys.add(key);
               transactions.push({
+                id: e.createdAt,
                 type: "Expense",
                 date: e.date,
                 source: "-",
@@ -78,7 +80,7 @@ const BankLedgerScreen = () => {
           }, { onlyOnce: true })
         );
 
-        // PAYMENTS (incoming & outgoing)
+        // PAYMENTS
         await new Promise((resolve) =>
           onValue(paymentsRef, (snap) => {
             const data = snap.val() || {};
@@ -94,22 +96,15 @@ const BankLedgerScreen = () => {
                     let amount = round2(Number(p.amount));
                     let source = "-";
 
-                    // OUTGOING payment (bank paid)
                     if (p.fromName === bankName) {
                       amount = -amount;
                       source = `to ${p.toName}`;
-                    }
-
-                    // INCOMING payment (bank received)
-                    if (p.toName === bankName) {
-                      amount = amount;
+                    } else if (p.toName === bankName) {
                       source = `from ${p.fromName}`;
-                    }
-
-                    // Skip if the bank is neither sender nor receiver
-                    if (p.fromName !== bankName && p.toName !== bankName) return;
+                    } else return;
 
                     transactions.push({
+                      id: p.createdAt,
                       type: "Payment",
                       date: p.date,
                       source,
@@ -125,7 +120,7 @@ const BankLedgerScreen = () => {
           }, { onlyOnce: true })
         );
 
-        // TRANSFERS TO BANK
+        // TRANSFERS
         await new Promise((resolve) =>
           onValue(ref(db, `transfers/bank/${bankName}`), (snap) => {
             const data = snap.val() || {};
@@ -136,6 +131,7 @@ const BankLedgerScreen = () => {
                 if (usedKeys.has(key)) return;
                 usedKeys.add(key);
                 transactions.push({
+                  id: t.createdAt,
                   type: "Transfer",
                   date: t.date || date,
                   source: t.from || "-",
@@ -165,9 +161,7 @@ const BankLedgerScreen = () => {
         setLedgerData({ bankName, transactions: finalTxns, balance: runningBalance });
         set(ref(db, `banks/${bankId}/balance`), runningBalance);
 
-        // Last page
-        const totalPages = Math.ceil(finalTxns.length / itemsPerPage);
-        setCurrentPage(totalPages > 0 ? totalPages : 1);
+        setCurrentPage(1);
       } catch (err) {
         console.error("Ledger error:", err);
       } finally {
@@ -176,10 +170,7 @@ const BankLedgerScreen = () => {
     };
 
     handleUpdate();
-
-    return () => {
-      off(paymentsRef, "value");
-    };
+    return () => off(paymentsRef, "value");
   }, [bankId, fromDate, toDate]);
 
   const totalPages = useMemo(
@@ -198,17 +189,16 @@ const BankLedgerScreen = () => {
     return `${String(date.getDate()).padStart(2, "0")}-${String(date.getMonth() + 1).padStart(2, "0")}-${date.getFullYear()}`;
   };
 
-  const handlePrint = useReactToPrint({
-    content: () => printRef.current,
-    documentTitle: `${ledgerData.bankName}_ledger`,
-  });
+  const handlePrint = () => {
+    window.print();
+  };
 
   if (loading) return <div className="p-4">Loading...</div>;
 
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
       {/* HEADER */}
-      <div className="flex items-center justify-between border-b pb-2 relative">
+      <div className="flex items-center justify-between border-b pb-2 relative print-hide">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -219,7 +209,6 @@ const BankLedgerScreen = () => {
             <ArrowLeft className="h-4 w-4" />
           </Button>
 
-          {/* DATE PICKERS */}
           <DatePicker
             selected={fromDate}
             onChange={(date) => setFromDate(date)}
@@ -242,7 +231,7 @@ const BankLedgerScreen = () => {
       </div>
 
       {/* PRINT AREA */}
-      <div ref={printRef}>
+      <div ref={printRef} className="print-area">
         <h1 className="text-3xl font-semibold text-center mb-4">{ledgerData.bankName}</h1>
 
         <div className="overflow-x-auto">
@@ -263,20 +252,23 @@ const BankLedgerScreen = () => {
                   <td colSpan={6} className="p-6">No transactions found</td>
                 </tr>
               ) : (
-                paginatedTransactions.map((t, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    <td className="border p-3">{formatDate(t.date)}</td>
-                    <td className="border p-3">{t.type}</td>
-                    <td className="border p-3">{t.source}</td>
-                    <td className="border p-3">{t.notes}</td>
-                    <td className={`border p-3 font-semibold ${t.amount >= 0 ? "text-green-600" : "text-red-600"}`}>
-                      {t.amount.toFixed(2)}
-                    </td>
-                    <td className={`border p-3 font-semibold ${t.runningBalance >= 0 ? "text-green-600" : "text-red-600"}`}>
-                      {t.runningBalance.toFixed(2)}
-                    </td>
-                  </tr>
-                ))
+                paginatedTransactions.map((t, idx) => {
+                  if (t.isOpening && currentPage !== 1) return null;
+                  return (
+                    <tr key={t.id || idx} className={t.isOpening ? "bg-gray-200 text-gray-700 font-semibold" : "hover:bg-gray-50"}>
+                      <td className="border p-3">{formatDate(t.date)}</td>
+                      <td className="border p-3">{t.type}</td>
+                      <td className="border p-3">{t.source}</td>
+                      <td className="border p-3">{t.notes}</td>
+                      <td className={`border p-3 font-semibold ${t.amount >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {t.amount.toFixed(2)}
+                      </td>
+                      <td className={`border p-3 font-semibold ${t.runningBalance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {t.runningBalance.toFixed(2)}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
 
               {/* Current balance */}
@@ -297,7 +289,7 @@ const BankLedgerScreen = () => {
       </div>
 
       {/* PAGINATION */}
-      <div className="fixed bottom-0 left-0 w-full bg-white border-t p-4 flex justify-center items-center gap-2 shadow-md z-50">
+      <div className="fixed bottom-0 left-0 w-full bg-white border-t p-4 flex justify-center items-center gap-2 shadow-md z-50 print-hide">
         <Button
           size="sm"
           disabled={currentPage === 1}
@@ -316,6 +308,40 @@ const BankLedgerScreen = () => {
           Next
         </Button>
       </div>
+
+      {/* PRINT STYLES */}
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+          .print-area,
+          .print-area * {
+            visibility: visible !important;
+          }
+          .print-area {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            padding: 24px;
+            box-shadow: none !important;
+            border: none !important;
+          }
+          .print-hide {
+            display: none !important;
+          }
+          @page {
+            size: A4;
+            margin: 12mm;
+          }
+          table {
+            page-break-inside: auto;
+          }
+          tr {
+            page-break-inside: avoid;
+          }
+        }
+      `}</style>
     </div>
   );
 };

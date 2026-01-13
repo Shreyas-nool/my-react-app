@@ -6,12 +6,15 @@ import { getDatabase, ref, onValue, remove } from "firebase/database";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
+const ITEMS_PER_PAGE = 20;
+
 const PaymentScreen = () => {
   const navigate = useNavigate();
 
   const [payments, setPayments] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDate, setSelectedDate] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   /* ---------------- FETCH PAYMENTS ---------------- */
   useEffect(() => {
@@ -34,7 +37,7 @@ const PaymentScreen = () => {
                   map.set(txn.txnId, {
                     id: txn.txnId,
                     date: txn.date || date,
-                    createdAt: txn.createdAt || Number(txn.txnId), // 🔑 use timestamp for sorting
+                    createdAt: txn.createdAt || Number(txn.txnId),
                     from: txn.fromName || "-",
                     to: txn.toName || "-",
                     amount: Number(txn.amount || 0),
@@ -51,7 +54,6 @@ const PaymentScreen = () => {
         });
       }
 
-      // 🔥 SORT LATEST FIRST BY createdAt
       const sorted = Array.from(map.values()).sort(
         (a, b) => b.createdAt - a.createdAt
       );
@@ -65,8 +67,7 @@ const PaymentScreen = () => {
   /* ---------------- HELPERS ---------------- */
   const formatDate = (dateString) => {
     if (!dateString) return "-";
-    const d = new Date(dateString);
-    return d.toLocaleDateString("en-GB");
+    return new Date(dateString).toLocaleDateString("en-GB");
   };
 
   const isSameDate = (d1, d2) =>
@@ -78,7 +79,8 @@ const PaymentScreen = () => {
   const filteredPayments = payments.filter((p) => {
     const q = searchQuery.toLowerCase();
     const matchesSearch =
-      p.from.toLowerCase().includes(q) || p.to.toLowerCase().includes(q);
+      p.from.toLowerCase().includes(q) ||
+      p.to.toLowerCase().includes(q);
 
     const matchesDate = selectedDate
       ? isSameDate(new Date(p.date), selectedDate)
@@ -86,6 +88,24 @@ const PaymentScreen = () => {
 
     return matchesSearch && matchesDate;
   });
+
+  /* ---------------- PAGINATION ---------------- */
+  const totalPages = Math.ceil(filteredPayments.length / ITEMS_PER_PAGE);
+
+  const paginatedPayments = filteredPayments.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedDate]);
+
+  /* ---------------- TOTAL (ALL FILTERED) ---------------- */
+  const totalAmount = filteredPayments.reduce(
+    (sum, p) => sum + p.amount,
+    0
+  );
 
   /* ---------------- DELETE ---------------- */
   const handleDelete = async (paths) => {
@@ -108,9 +128,7 @@ const PaymentScreen = () => {
           <ArrowLeft className="h-4 w-4" />
         </Button>
 
-        <h1 className="text-2xl font-semibold text-center">
-          Payments Record
-        </h1>
+        <h1 className="text-2xl font-semibold">Payments Record</h1>
 
         <Button
           onClick={() => navigate("/payment/add")}
@@ -126,9 +144,9 @@ const PaymentScreen = () => {
           selected={selectedDate}
           onChange={(date) => setSelectedDate(date)}
           placeholderText="Select date"
-          className="border border-gray-400 rounded px-3 py-2"
+          className="border rounded px-3 py-2"
           isClearable
-          dateFormat="dd / MM / yyyy"
+          dateFormat="dd-MM-yyyy"
         />
 
         <input
@@ -136,15 +154,15 @@ const PaymentScreen = () => {
           placeholder="Search party / account..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="border border-gray-400 rounded px-3 py-2 w-60"
+          className="border rounded px-3 py-2 w-60"
         />
       </div>
 
       {/* TABLE */}
       <div className="overflow-x-auto">
-        <table className="w-full border border-gray-300 text-center">
-          <thead>
-            <tr className="bg-gray-100 text-lg">
+        <table className="w-full border text-center">
+          <thead className="bg-gray-100 text-lg">
+            <tr>
               <th className="border p-3">Date</th>
               <th className="border p-3">From</th>
               <th className="border p-3">To</th>
@@ -155,14 +173,14 @@ const PaymentScreen = () => {
           </thead>
 
           <tbody>
-            {filteredPayments.length === 0 ? (
+            {paginatedPayments.length === 0 ? (
               <tr>
                 <td colSpan={6} className="p-6">
                   No payments found
                 </td>
               </tr>
             ) : (
-              filteredPayments.map((p) => (
+              paginatedPayments.map((p) => (
                 <tr key={p.id} className="hover:bg-gray-50">
                   <td className="border p-3">{formatDate(p.date)}</td>
                   <td className="border p-3">{p.from}</td>
@@ -182,8 +200,50 @@ const PaymentScreen = () => {
               ))
             )}
           </tbody>
+
+          {/* TOTAL FOOTER */}
+          {filteredPayments.length > 0 && (
+            <tfoot>
+              <tr className="bg-gray-100 font-semibold">
+                <td colSpan={3} className="border p-3 text-right">
+                  Total Amount:
+                </td>
+                <td className="border p-3">
+                  {totalAmount.toFixed(2)}
+                </td>
+                <td colSpan={2} className="border p-3"></td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
+
+      {/* PAGINATION */}
+      {totalPages > 1 && (
+        <div className="flex justify-center gap-3 mt-4">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage((p) => p - 1)}
+          >
+            Prev
+          </Button>
+
+          <span className="px-3 py-1 border rounded">
+            Page {currentPage} of {totalPages}
+          </span>
+
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage((p) => p + 1)}
+          >
+            Next
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

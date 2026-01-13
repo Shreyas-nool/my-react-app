@@ -75,7 +75,12 @@ const SalesInvoice = () => {
   const [pricePerItem, setPricePerItem] = useState("");
   const [items, setItems] = useState([]);
   const [subtotal, setSubtotal] = useState(0);
-  const [createdAt, setCreatedAt] = useState(new Date());
+  
+  const [createdAt, setCreatedAt] = useState(() => {
+    const saved = localStorage.getItem("lastSalesDate");
+    return saved ? new Date(saved) : new Date();
+  });
+
   const [stockWarning, setStockWarning] = useState("");
 
   // TEMP STOCK (session-only)
@@ -515,13 +520,18 @@ const SalesInvoice = () => {
           <label className="text-sm font-medium">Invoice Date</label>
           <DatePicker
             selected={createdAt}
-            onChange={setCreatedAt}
+            onChange={(date) => {
+              setCreatedAt(date);
+              localStorage.setItem("lastSalesDate", date.toISOString());
+            }}
             timeIntervals={1}
             dateFormat="dd/MM/yyyy"
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
             maxDate={new Date()}
           />
         </div>
+
+        
 
         {/* WAREHOUSE */}
         <div className="flex flex-col gap-1">

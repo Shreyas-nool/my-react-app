@@ -6,7 +6,6 @@ import { Button } from "../../components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { useReactToPrint } from "react-to-print";
 
 const PartyLedgerScreen = () => {
   const { id } = useParams();
@@ -18,25 +17,30 @@ const PartyLedgerScreen = () => {
     transactions: [],
     balance: 0,
   });
+
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [fromDate, setFromDate] = useState(null);
   const [toDate, setToDate] = useState(null);
 
-  const itemsPerPage = 20;
-  const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+  const ITEMS_PER_PAGE = 20;
+  const round2 = (n) =>
+    Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
+  /* ---------------- FETCH LEDGER ---------------- */
   useEffect(() => {
     setLoading(true);
+
     const partyRef = ref(db, `parties/${id}`);
     const salesRef = ref(db, "sales");
     const paymentsRef = ref(db, "payments");
 
-    const handleUpdate = async () => {
+    const buildLedger = async () => {
       try {
         const partySnap = await new Promise((resolve) =>
           onValue(partyRef, resolve, { onlyOnce: true })
         );
+
         const party = partySnap.val();
         if (!party) return;
 
@@ -47,6 +51,7 @@ const PartyLedgerScreen = () => {
         const transactions = [];
         const usedKeys = new Set();
 
+        /* Opening balance */
         transactions.push({
           type: "Old Balance",
           date: createdAt,
@@ -56,6 +61,7 @@ const PartyLedgerScreen = () => {
           amount: openingBalance,
         });
 
+        /* Sales */
         await new Promise((resolve) =>
           onValue(
             salesRef,
@@ -64,18 +70,22 @@ const PartyLedgerScreen = () => {
               Object.values(sales).forEach((group) => {
                 Object.values(group).forEach((inv) => {
                   if (inv.partyId !== id) return;
+
                   const key = `sale-${inv.invoiceNumber}`;
                   if (usedKeys.has(key)) return;
                   usedKeys.add(key);
 
                   const total = round2(
-                    inv.items?.reduce((sum, i) => sum + Number(i.total || 0), 0)
+                    inv.items?.reduce(
+                      (s, i) => s + Number(i.total || 0),
+                      0
+                    )
                   );
 
                   transactions.push({
                     type: "Sale",
-                    date: inv.date || inv.createdAt,
-                    invoice: inv.invoiceNumber || "-",
+                    date: inv.createdAt,
+                    invoice: inv.invoiceNumber,
                     source: "-",
                     notes: "-",
                     amount: total,
@@ -88,6 +98,7 @@ const PartyLedgerScreen = () => {
           )
         );
 
+        /* Payments */
         await new Promise((resolve) =>
           onValue(
             paymentsRef,
@@ -98,23 +109,34 @@ const PartyLedgerScreen = () => {
                   Object.values(l2).forEach((l3) => {
                     Object.values(l3).forEach((p) => {
                       if (!p?.txnId) return;
+
                       const key = `payment-${p.txnId}`;
                       if (usedKeys.has(key)) return;
                       usedKeys.add(key);
-                      if (p.fromName !== partyName && p.toName !== partyName) return;
+
+                      if (
+                        p.fromName !== partyName &&
+                        p.toName !== partyName
+                      )
+                        return;
 
                       let amount = round2(Number(p.amount || 0));
                       let source = "-";
-                      if (p.fromName === partyName) amount = -amount;
-                      if (p.fromName === partyName) source = `to ${p.toName}`;
-                      if (p.toName === partyName) source = `from ${p.fromName}`;
+
+                      if (p.fromName === partyName) {
+                        amount = -amount;
+                        source = `to ${p.toName}`;
+                      }
+                      if (p.toName === partyName) {
+                        source = `from ${p.fromName}`;
+                      }
 
                       transactions.push({
                         type: "Payment",
                         date: p.date || p.createdAt,
                         invoice: "-",
                         source,
-                        notes: "-",
+                        notes: p.note?.trim() ? p.note : "-",
                         amount,
                       });
                     });
@@ -127,11 +149,16 @@ const PartyLedgerScreen = () => {
           )
         );
 
+        /* Sort by date */
         transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
-        let runningBalance = 0;
 
+        /* Running balance */
+        let runningBalance = 0;
         const finalTxns = transactions.map((t, i) => {
-          runningBalance = i === 0 ? round2(t.amount) : round2(runningBalance + t.amount);
+          runningBalance =
+            i === 0
+              ? round2(t.amount)
+              : round2(runningBalance + t.amount);
           return { ...t, runningBalance };
         });
 
@@ -141,8 +168,8 @@ const PartyLedgerScreen = () => {
           balance: runningBalance,
         });
 
-        setCurrentPage(Math.ceil(finalTxns.length / itemsPerPage) || 1);
         set(ref(db, `parties/${id}/balance`), runningBalance);
+        setCurrentPage(Math.ceil(finalTxns.length / ITEMS_PER_PAGE) || 1);
       } catch (err) {
         console.error("Ledger error:", err);
       } finally {
@@ -150,27 +177,49 @@ const PartyLedgerScreen = () => {
       }
     };
 
-    handleUpdate();
+    buildLedger();
 
-    const salesListener = onValue(salesRef, handleUpdate);
-    const paymentsListener = onValue(paymentsRef, handleUpdate);
+    const s = onValue(salesRef, buildLedger);
+    const p = onValue(paymentsRef, buildLedger);
 
     return () => {
-      off(salesRef, "value", salesListener);
-      off(paymentsRef, "value", paymentsListener);
+      off(salesRef, "value", s);
+      off(paymentsRef, "value", p);
     };
   }, [id]);
 
-  const totalPages = useMemo(
-    () => Math.ceil(ledgerData.transactions.length / itemsPerPage),
-    [ledgerData.transactions.length]
+  /* ---------------- DATE FILTER ---------------- */
+  const filteredTransactions = useMemo(() => {
+    return ledgerData.transactions.filter((t) => {
+      const d = new Date(t.date);
+
+      if (fromDate) {
+        const f = new Date(fromDate);
+        f.setHours(0, 0, 0, 0);
+        if (d < f) return false;
+      }
+
+      if (toDate) {
+        const tDate = new Date(toDate);
+        tDate.setHours(23, 59, 59, 999);
+        if (d > tDate) return false;
+      }
+
+      return true;
+    });
+  }, [ledgerData.transactions, fromDate, toDate]);
+
+  /* ---------------- PAGINATION ---------------- */
+  const totalPages = Math.ceil(
+    filteredTransactions.length / ITEMS_PER_PAGE
   );
 
-  const paginatedTransactions = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return ledgerData.transactions.slice(start, start + itemsPerPage);
-  }, [ledgerData.transactions, currentPage]);
+  const paginatedTransactions = filteredTransactions.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
+  /* ---------------- HELPERS ---------------- */
   const formatDate = (d) => {
     if (!d) return "-";
     const date = new Date(d);
@@ -179,76 +228,81 @@ const PartyLedgerScreen = () => {
     ).padStart(2, "0")}-${date.getFullYear()}`;
   };
 
-  const handlePrint = useReactToPrint({
-    content: () => printRef.current,
-    documentTitle: `${ledgerData.partyName}_ledger`,
-  });
+  const handlePrint = () => {
+    window.print();
+  };
 
-  /* ✅ LOADER */
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[70vh]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-10 w-10 border-4 border-gray-300 border-t-black rounded-full animate-spin" />
-          <p className="text-sm text-gray-500">Loading ledger...</p>
-        </div>
+        Loading ledger...
       </div>
     );
   }
 
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 p-4 space-y-4">
-      {/* HEADER */}
-      <div className="flex items-center justify-between border-b pb-2 relative">
+      {/* HEADER (NOT PRINTED) */}
+      <div className="flex items-center justify-between border-b pb-2 print-hide">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="h-9 w-9 p-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(-1)}
+            className="h-9 w-9 p-0"
+          >
             <ArrowLeft className="h-4 w-4" />
           </Button>
 
           <DatePicker
             selected={fromDate}
-            onChange={(date) => setFromDate(date)}
+            onChange={setFromDate}
             placeholderText="From"
             className="border rounded px-2 py-1 text-sm"
             isClearable
           />
+
           <DatePicker
             selected={toDate}
-            onChange={(date) => setToDate(date)}
+            onChange={setToDate}
             placeholderText="To"
             className="border rounded px-2 py-1 text-sm"
             isClearable
           />
         </div>
 
-        <Button onClick={handlePrint} className="absolute right-0 top-1/2 -translate-y-1/2 h-9 text-sm">
+        <Button onClick={handlePrint} className="h-9 text-sm">
           Print Ledger
         </Button>
       </div>
 
       {/* PRINT AREA */}
-      <div ref={printRef}>
-        <h1 className="text-3xl font-semibold text-center mb-4">{ledgerData.partyName}</h1>
+      <div
+        ref={printRef}
+        className="print-area bg-white border shadow-md p-6"
+      >
+        <h1 className="text-3xl font-semibold text-center mb-4">
+          {ledgerData.partyName}
+        </h1>
 
-        <div className="overflow-x-auto">
-          <table className="w-full border border-gray-300 text-center">
-            <thead>
-              <tr className="bg-gray-100 text-xl">
-                <th className="border p-3">Date</th>
-                <th className="border p-3">Type</th>
-                <th className="border p-3">Invoice</th>
-                <th className="border p-3">Source</th>
-                <th className="border p-3">Notes</th>
-                <th className="border p-3">Amount</th>
-                <th className="border p-3">Balance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedTransactions.map((t, idx) => (
-                <tr key={idx}>
-                  <td className="border p-3">{formatDate(t.date)}</td>
-                  <td className="border p-3">{t.type}</td>
-                  <td className="border p-3">
+        <table className="w-full border border-gray-300 text-center">
+          <thead>
+            <tr className="bg-gray-100 text-lg">
+              <th className="border p-3">Date</th>
+              <th className="border p-3">Type</th>
+              <th className="border p-3">Invoice</th>
+              <th className="border p-3">Source</th>
+              <th className="border p-3">Notes</th>
+              <th className="border p-3">Amount</th>
+              <th className="border p-3">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {paginatedTransactions.map((t, i) => (
+              <tr key={i}>
+                <td className="border p-3">{formatDate(t.date)}</td>
+                <td className="border p-3">{t.type}</td>
+                <td className="border p-3">
                     {t.invoice !== "-" ? (
                       <button
                         className="text-blue-600 underline hover:text-blue-800"
@@ -266,41 +320,90 @@ const PartyLedgerScreen = () => {
                       "-"
                     )}
                   </td>
-                  <td className="border p-3">{t.source}</td>
-                  <td className="border p-3">{t.notes}</td>
-                  <td className={`border p-3 ${t.amount >= 0 ? "text-red-600" : "text-green-600"}`}>
-                    {t.amount.toFixed(2)}
-                  </td>
-                  <td className={`border p-3 ${t.runningBalance >= 0 ? "text-red-600" : "text-green-600"}`}>
-                    {t.runningBalance.toFixed(2)}
-                  </td>
-                </tr>
-              ))}
-
-              {/* CURRENT BALANCE ROW */}
-              <tr className="bg-gray-100 font-bold">
-                <td colSpan={6} className="border p-3 text-right">
-                  Current Balance
-                </td>
-                <td className={`border p-3 ${ledgerData.balance >= 0 ? "text-red-600" : "text-green-600"}`}>
-                  {ledgerData.balance.toFixed(2)}
+                <td className="border p-3">{t.source}</td>
+                <td className="border p-3">{t.notes}</td>
+                <td className="border p-3">{t.amount.toFixed(2)}</td>
+                <td className="border p-3">
+                  {t.runningBalance.toFixed(2)}
                 </td>
               </tr>
-            </tbody>
-          </table>
-        </div>
+            ))}
+
+            <tr className="bg-gray-100 font-bold">
+              <td colSpan={6} className="border p-3 text-right">
+                Current Balance
+              </td>
+              <td className="border p-3">
+                {ledgerData.balance.toFixed(2)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
-      {/* PAGINATION */}
-      <div className="fixed bottom-0 left-0 w-full bg-white border-t p-4 flex justify-center gap-2">
-        <Button size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>
-          Prev
-        </Button>
-        <span>Page {currentPage} of {totalPages}</span>
-        <Button size="sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>
-          Next
-        </Button>
-      </div>
+      {/* PAGINATION (NOT PRINTED) */}
+      {totalPages > 1 && (
+        <div className="fixed bottom-0 left-0 w-full bg-white border-t p-4 flex justify-center gap-2 print-hide">
+          <Button
+            size="sm"
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage((p) => p - 1)}
+          >
+            Prev
+          </Button>
+          <span>
+            Page {currentPage} of {totalPages}
+          </span>
+          <Button
+            size="sm"
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage((p) => p + 1)}
+          >
+            Next
+          </Button>
+        </div>
+      )}
+
+      {/* PRINT STYLES (SAME AS ViewInvoice) */}
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden !important;
+            margin: 0;
+          }
+
+          .print-area,
+          .print-area * {
+            visibility: visible !important;
+          }
+
+          .print-area {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            padding: 24px;
+            box-shadow: none !important;
+            border: none !important;
+          }
+
+          .print-hide {
+            display: none !important;
+          }
+
+          @page {
+            size: A4;
+            margin: 12mm;
+          }
+
+          table {
+            page-break-inside: auto;
+          }
+
+          tr {
+            page-break-inside: avoid;
+          }
+        }
+      `}</style>
     </div>
   );
 };

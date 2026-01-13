@@ -25,7 +25,11 @@ import { cn } from "../../lib/utils";
 export default function AddPayment() {
   const navigate = useNavigate();
 
-  const [date, setDate] = useState(new Date());
+  const [date, setDate] = useState(() => {
+    const saved = localStorage.getItem("lastPaymentDate");
+    return saved ? new Date(saved) : new Date();
+  });
+
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
 
@@ -262,7 +266,16 @@ export default function AddPayment() {
       await savePaymentNode();
 
       alert("Transaction Added Successfully");
-      navigate("/payment");
+
+      // reset form (optional but recommended)
+      setAmount("");
+      setNote("");
+      setFromType("");
+      setToType("");
+      setFromEntity(null);
+      setToEntity(null);
+      setDate(new Date());
+      
     } catch (err) {
       console.error(err);
       alert("Error saving transaction");
@@ -288,7 +301,10 @@ export default function AddPayment() {
                   <label>Date<br /></label>
                   <DatePicker
                     selected={date}
-                    onChange={setDate}
+                    onChange={(d) => {
+                      setDate(d);
+                      localStorage.setItem("lastPaymentDate", d.toISOString());
+                    }}
                     className="w-full border rounded p-2"
                     dateFormat="dd-MM-yyyy"
                     maxDate={new Date()}
