@@ -20,6 +20,7 @@ import { ArrowLeft, ChevronsUpDown, Check, Trash2 } from "lucide-react";
 import { db } from "../../firebase";
 import { ref, set, runTransaction, onValue } from "firebase/database";
 import { cn } from "../../lib/utils";
+import { toast } from "react-toastify";
 
 // Format ISO with date & time
 const formatToISO = (dateObj) => {
@@ -355,9 +356,20 @@ const SalesInvoice = () => {
         saleRef = ref(db, `sales/${isoDateTime}/invoice-${invoiceNumber}`);
       }
 
+      // Find selected party
+      const selectedParty = parties.find(p => p.id === selectedPartyId);
+
+      // Compute due date using party's credit period
+      let dueDate = null;
+      if (selectedParty && selectedParty.creditPeriod) {
+        dueDate = new Date(createdAt); // copy invoice date
+        dueDate.setDate(dueDate.getDate() + Number(selectedParty.creditPeriod));
+      }
+
       // Build sale data
       const saleData = {
         createdAt: formatToISO(createdAt), // update date even if changed
+        dueDate: dueDate ? formatToISO(dueDate) : null,
         partyId: selectedPartyId,
         warehouseId: selectedWarehouseId,
         items,
@@ -374,16 +386,18 @@ const SalesInvoice = () => {
         await updateStockAfterSale(items);
       }
 
-      alert(
+      toast.success(
         invoiceToEdit
           ? `Invoice updated! Invoice No: ${invoiceNumber}`
           : `Sale saved! Invoice No: ${invoiceNumber}`
       );
 
-      navigate("/sales");
+      navigate("/sales", {
+        state: { goToLastPage: true }
+      });
     } catch (err) {
       console.error(err);
-      alert("Error saving sale.");
+      toast.error("Error saving sale.");
     }
   };
 

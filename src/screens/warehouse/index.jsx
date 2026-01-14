@@ -66,29 +66,36 @@ const WareHouse = () => {
   /* ---------- Load Transfer Records from wentry ---------- */
   useEffect(() => {
     const wentryRef = ref(db, "wentry");
+
     onValue(wentryRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        let records = [];
-
-        // Iterate over each warehouse
-        Object.entries(data).forEach(([warehouseName, entries]) => {
-          Object.values(entries).forEach((entry) => {
-            records.push({ ...entry, warehouseName });
-          });
-        });
-
-        // Sort by createdAt descending
-        records.sort((a, b) => b.createdAt - a.createdAt);
-
-        // Remove duplicates by ID if present
-        const uniqueRecords = Array.from(
-          new Map(records.map((r) => [r.createdAt, r])).values()
-        );
-        setTransferRecords(uniqueRecords);
-      } else {
+      if (!snapshot.exists()) {
         setTransferRecords([]);
+        return;
       }
+
+      const data = snapshot.val();
+      const recordMap = new Map(); // 🔑 key = uuid
+
+      Object.entries(data).forEach(([warehouseName, entries]) => {
+        Object.entries(entries).forEach(([firebaseKey, entry]) => {
+          const uuid = entry.id ?? firebaseKey;
+
+          // ✅ dedupe ONLY by uuid
+          if (!recordMap.has(uuid)) {
+            recordMap.set(uuid, {
+              ...entry,
+              id: uuid,
+              warehouseName,
+            });
+          }
+        });
+      });
+
+      const records = Array.from(recordMap.values()).sort(
+        (a, b) => b.createdAt - a.createdAt
+      );
+
+      setTransferRecords(records);
     });
   }, []);
 
@@ -262,28 +269,29 @@ const WareHouse = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedRecords.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="text-center p-4">
-                          No stock transfers found.
-                        </td>
-                      </tr>
-                    ) : (
-                      paginatedRecords.map((r) => (
-                        <tr
-                          key={r.createdAt}
-                          className="hover:bg-gray-50 text-sm sm:text-base"
-                        >
-                          <td className="border p-2">{formatDate(r.date)}</td>
-                          <td className="border p-2">{r.from}</td>
-                          <td className="border p-2">{r.to}</td>
-                          <td className="border p-2">{r.category}</td>
-                          <td className="border p-2">{r.product}</td>
-                          <td className="border p-2">{r.boxes}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
+  {paginatedRecords.length === 0 ? (
+    <tr>
+      <td colSpan={6} className="text-center p-4">
+        No stock transfers found.
+      </td>
+    </tr>
+  ) : (
+    paginatedRecords.map((r) => (
+      <tr
+        key={r.id || `${r.from}_${r.to}_${r.product}_${r.createdAt}`}
+        className="hover:bg-gray-50 text-sm sm:text-base"
+      >
+        <td className="border p-2">{formatDate(r.date)}</td>
+        <td className="border p-2">{r.from}</td>
+        <td className="border p-2">{r.to}</td>
+        <td className="border p-2">{r.category}</td>
+        <td className="border p-2">{r.product}</td>
+        <td className="border p-2">{r.boxes}</td>
+      </tr>
+    ))
+  )}
+</tbody>
+
                 </table>
 
                 {/* Pagination */}

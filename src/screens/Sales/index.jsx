@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import {
   ArrowLeft,
@@ -19,7 +19,13 @@ const ITEMS_PER_PAGE = 20;
 
 const SalesScreen = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
+const [invoiceToDelete, setInvoiceToDelete] = useState(null); // the invoice user wants to delete
+const [deleteMessage, setDeleteMessage] = useState(""); // success or error message
+const [deleting, setDeleting] = useState(false); // loading state
+
+  const [salesLoaded, setSalesLoaded] = useState(false);
   const [fromDate, setFromDate] = useState(null);
   const [toDate, setToDate] = useState(null);
   const [sales, setSales] = useState([]);
@@ -51,8 +57,10 @@ const SalesScreen = () => {
       const data = snapshot.val();
       if (!data) {
         setSales([]);
+        setSalesLoaded(true);
         return;
       }
+
       const arr = [];
       Object.entries(data).forEach(([dateKey, invoices]) => {
         Object.entries(invoices).forEach(([invoiceKey, sale]) => {
@@ -63,8 +71,11 @@ const SalesScreen = () => {
           });
         });
       });
+
       setSales(arr);
+      setSalesLoaded(true);
     });
+
     return () => unsub();
   }, []);
 
@@ -160,8 +171,17 @@ const SalesScreen = () => {
   );
 
   useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(totalPages || 1);
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages || 1);
+    }
   }, [totalPages]);
+
+  useEffect(() => {
+  if (salesLoaded && totalPages > 0) {
+    setCurrentPage(totalPages);
+  }
+}, [salesLoaded, totalPages]);
+
 
   /* ---------- Totals ---------- */
   const filteredTotal = round2(
@@ -192,36 +212,41 @@ const SalesScreen = () => {
 
   /* ---------- Delete ---------- */
   const deleteInvoice = async (sale) => {
-    if (!window.confirm("Delete this invoice?")) return;
+  setDeleting(true);
+  setDeleteMessage(""); // clear previous messages
 
-    try {
-      for (const item of sale.items) {
-        const stockRef = ref(db, `stocks/${item.dateKey}/${item.stockId}`);
-        await runTransaction(stockRef, (current) => {
-          if (!current) return current;
-          const piecesPerBox = Number(current.piecesPerBox) || 1;
-          const soldPieces = Number(item.box || 0) * piecesPerBox;
-          const currentTotalPieces =
-            (Number(current.boxes) || 0) * piecesPerBox +
-            (Number(current.pieces) || 0);
-          const newTotalPieces = currentTotalPieces + soldPieces;
-          return {
-            ...current,
-            boxes: Math.floor(newTotalPieces / piecesPerBox),
-            pieces: newTotalPieces % piecesPerBox,
-          };
-        });
-      }
-
-      const delRef = ref(db, `sales/${sale._dateKey}/${sale._invoiceKey}`);
-      await set(delRef, null);
-
-      alert("Sale deleted and stock restored!");
-    } catch (err) {
-      console.error(err);
-      alert("Error deleting sale.");
+  try {
+    for (const item of sale.items) {
+      const stockRef = ref(db, `stocks/${item.dateKey}/${item.stockId}`);
+      await runTransaction(stockRef, (current) => {
+        if (!current) return current;
+        const piecesPerBox = Number(current.piecesPerBox) || 1;
+        const soldPieces = Number(item.box || 0) * piecesPerBox;
+        const currentTotalPieces =
+          (Number(current.boxes) || 0) * piecesPerBox +
+          (Number(current.pieces) || 0);
+        const newTotalPieces = currentTotalPieces + soldPieces;
+        return {
+          ...current,
+          boxes: Math.floor(newTotalPieces / piecesPerBox),
+          pieces: newTotalPieces % piecesPerBox,
+        };
+      });
     }
-  };
+
+    const delRef = ref(db, `sales/${sale._dateKey}/${sale._invoiceKey}`);
+    await set(delRef, null);
+
+    setDeleteMessage("✅ Sale deleted and stock restored!");
+    setInvoiceToDelete(null);
+  } catch (err) {
+    console.error(err);
+    setDeleteMessage("❌ Error deleting sale. Try again.");
+  } finally {
+    setDeleting(false);
+  }
+};
+
 
   /* ---------- UI ---------- */
   return (
@@ -353,13 +378,35 @@ const SalesScreen = () => {
                     <td className="border p-3">{warehouseName}</td>
                     <td className="border p-3">{totalAmount.toFixed(2)}</td>
                     <td className="border p-3">
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => deleteInvoice(sale)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {invoiceToDelete?._invoiceKey === sale._invoiceKey ? (
+                        <div className="flex gap-2 justify-center items-center">
+                          <span>Are you sure?</span>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => deleteInvoice(sale)}
+                            disabled={deleting}
+                          >
+                            {deleting ? "Deleting..." : "Yes"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setInvoiceToDelete(null)}
+                            disabled={deleting}
+                          >
+                            No
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => setInvoiceToDelete(sale)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 );

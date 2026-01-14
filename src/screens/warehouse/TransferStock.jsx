@@ -95,50 +95,81 @@ const TransferStock = () => {
 
   // Handle Transfer
   const handleTransfer = async () => {
-    if (!fromWarehouse || !toWarehouse) return alert("Select From and To warehouses");
+    if (!fromWarehouse || !toWarehouse)
+      return alert("Select From and To warehouses");
+
+    const stocksRef = ref(db, "stocks");
+    const snapshot = await get(stocksRef);
+    if (!snapshot.exists()) return alert("Stocks not found");
+
+    const stocksData = snapshot.val();
 
     for (let row of transferRows) {
       const { category, product, boxes, availableBoxes } = row;
       const boxesToTransfer = Number(boxes);
 
-      if (!category || !product || !boxesToTransfer || boxesToTransfer <= 0 || boxesToTransfer > availableBoxes)
+      if (
+        !category ||
+        !product ||
+        !boxesToTransfer ||
+        boxesToTransfer <= 0 ||
+        boxesToTransfer > availableBoxes
+      ) {
         return alert("Check all row fields and box limits");
+      }
 
-      const stocksRef = ref(db, "stocks");
-      const snapshot = await get(stocksRef);
-      if (!snapshot.exists()) return alert("Stocks not found");
+      // 🔑 ONE UUID FOR THIS ROW (USED EVERYWHERE)
+      const transferUUID =
+        Date.now() + Math.floor(Math.random() * 1000);
 
-      const stocksData = snapshot.val();
+      // ---------- FROM WAREHOUSE ----------
+      let fromStock = null;
 
-      // Update From Warehouse
-      let fromStock;
       Object.entries(stocksData).forEach(([dateKey, items]) => {
         Object.entries(items).forEach(([id, item]) => {
-          if (item.warehouse === fromWarehouse && item.category === category && item.productName === product) {
+          if (
+            item.warehouse === fromWarehouse &&
+            item.category === category &&
+            item.productName === product
+          ) {
             fromStock = item;
             const newBoxes = item.boxes - boxesToTransfer;
+
             set(ref(db, `stocks/${dateKey}/${id}`), {
               ...item,
               boxes: newBoxes,
               totalPieces: newBoxes * item.piecesPerBox,
-              totalValue: newBoxes * item.piecesPerBox * item.pricePerPiece,
+              totalValue:
+                newBoxes *
+                item.piecesPerBox *
+                item.pricePerPiece,
             });
           }
         });
       });
 
-      // Update To Warehouse
+      // ---------- TO WAREHOUSE ----------
       let foundTo = false;
+
       Object.entries(stocksData).forEach(([dateKey, items]) => {
         Object.entries(items).forEach(([id, item]) => {
-          if (item.warehouse === toWarehouse && item.category === category && item.productName === product) {
+          if (
+            item.warehouse === toWarehouse &&
+            item.category === category &&
+            item.productName === product
+          ) {
             const newBoxes = item.boxes + boxesToTransfer;
+
             set(ref(db, `stocks/${dateKey}/${id}`), {
               ...item,
               boxes: newBoxes,
               totalPieces: newBoxes * item.piecesPerBox,
-              totalValue: newBoxes * item.piecesPerBox * item.pricePerPiece,
+              totalValue:
+                newBoxes *
+                item.piecesPerBox *
+                item.pricePerPiece,
             });
+
             foundTo = true;
           }
         });
@@ -146,28 +177,56 @@ const TransferStock = () => {
 
       if (!foundTo && fromStock) {
         const dateKey = formattedLocalDate;
-        const newStockId = Date.now();
-        await set(ref(db, `stocks/${dateKey}/${newStockId}`), {
+
+        await set(ref(db, `stocks/${dateKey}/${transferUUID}`), {
           ...fromStock,
-          id: newStockId,
+          id: transferUUID,
           warehouse: toWarehouse,
           boxes: boxesToTransfer,
-          totalPieces: boxesToTransfer * fromStock.piecesPerBox,
-          totalValue: boxesToTransfer * fromStock.piecesPerBox * fromStock.pricePerPiece,
+          totalPieces:
+            boxesToTransfer * fromStock.piecesPerBox,
+          totalValue:
+            boxesToTransfer *
+            fromStock.piecesPerBox *
+            fromStock.pricePerPiece,
         });
       }
 
-      // Add entries to wentry
-      const entryData = { from: fromWarehouse, to: toWarehouse, category, product, boxes: boxesToTransfer, date: formattedLocalDate, createdAt: timestampLocal };
-      const entryIdFrom = Date.now();
-      const entryIdTo = entryIdFrom + 1;
+      // ---------- WENTRY (SAME UUID BOTH SIDES) ----------
+      const entryData = {
+        id: transferUUID,
+        from: fromWarehouse,
+        to: toWarehouse,
+        category,
+        product,
+        boxes: boxesToTransfer,
+        date: formattedLocalDate,
+        createdAt: timestampLocal,
+      };
 
-      await set(ref(db, `wentry/${fromWarehouse}/${entryIdFrom}`), entryData);
-      await set(ref(db, `wentry/${toWarehouse}/${entryIdTo}`), entryData);
+      await set(
+        ref(db, `wentry/${fromWarehouse}/${transferUUID}`),
+        entryData
+      );
+
+      await set(
+        ref(db, `wentry/${toWarehouse}/${transferUUID}`),
+        entryData
+      );
     }
 
     alert("✅ Stock transferred successfully!");
-    setTransferRows([{ id: Date.now(), category: "", product: "", boxes: "", availableBoxes: 0 }]);
+
+    // Reset
+    setTransferRows([
+      {
+        id: Date.now(),
+        category: "",
+        product: "",
+        boxes: "",
+        availableBoxes: 0,
+      },
+    ]);
     setFromWarehouse("");
     setToWarehouse("");
   };
