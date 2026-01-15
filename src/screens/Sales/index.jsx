@@ -20,7 +20,6 @@ const SalesScreen = () => {
   const navigate = useNavigate();
 
   const [pageInitialized, setPageInitialized] = useState(false);
-
   const [sales, setSales] = useState([]);
   const [salesLoaded, setSalesLoaded] = useState(false);
 
@@ -38,6 +37,7 @@ const SalesScreen = () => {
 
   const [currentPage, setCurrentPage] = useState(1);
 
+  // DELETE STATES
   const [invoiceToDelete, setInvoiceToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -66,21 +66,20 @@ const SalesScreen = () => {
 
       const arr = [];
 
-      Object.entries(data).forEach(([_, invoices]) => {
-        Object.entries(invoices || {}).forEach(([invoiceKey, sale]) => {
-          // ✅ DEFINE pureDateKey FIRST
-          const d = new Date(sale.createdAt);
-          const pureDateKey = `${d.getFullYear()}-${String(
-            d.getMonth() + 1
-          ).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      Object.entries(data || {}).forEach(([parentKey, invoices]) => {
+  Object.entries(invoices || {}).forEach(([invoiceKey, sale]) => {
+    const d = new Date(sale.createdAt);
+    const pureDateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-          arr.push({
-            ...sale,
-            _dateKey: pureDateKey, // ✅ now it exists
-            _invoiceKey: invoiceKey,
-          });
-        });
-      });
+    arr.push({
+      ...sale,
+      _dateKey: pureDateKey,          // for UI grouping & sorting
+      _firebaseDateKey: parentKey,    // actual Firebase node path
+      _invoiceKey: invoiceKey,
+    });
+  });
+});
+
 
       setSales(arr);
       setSalesLoaded(true);
@@ -149,18 +148,10 @@ const SalesScreen = () => {
       if (sortConfig.key === "party") {
         aVal = partiesMap[a.partyId]?.name || "";
         bVal = partiesMap[b.partyId]?.name || "";
-      } 
-      else if (sortConfig.key === "createdAt") {
-        const aDate = new Date(a.createdAt);
-        const bDate = new Date(b.createdAt);
-
-        aDate.setHours(0, 0, 0, 0);
-        bDate.setHours(0, 0, 0, 0);
-
-        aVal = aDate.getTime();
-        bVal = bDate.getTime();
-      } 
-      else if (sortConfig.key === "date") {
+      } else if (sortConfig.key === "createdAt") {
+        aVal = new Date(a.createdAt).getTime();
+        bVal = new Date(b.createdAt).getTime();
+      } else if (sortConfig.key === "date") {
         aVal = a._dateKey;
         bVal = b._dateKey;
       } else {
@@ -177,7 +168,6 @@ const SalesScreen = () => {
   /* ---------- DATE-AWARE PAGINATION ---------- */
   const pages = useMemo(() => {
     const grouped = {};
-
     sortedSales.forEach((sale) => {
       if (!grouped[sale._dateKey]) grouped[sale._dateKey] = [];
       grouped[sale._dateKey].push(sale);
@@ -189,10 +179,7 @@ const SalesScreen = () => {
       .forEach((dateKey) => {
         const list = grouped[dateKey];
         for (let i = 0; i < list.length; i += ITEMS_PER_PAGE) {
-          result.push({
-            dateKey,
-            invoices: list.slice(i, i + ITEMS_PER_PAGE),
-          });
+          result.push({ dateKey, invoices: list.slice(i, i + ITEMS_PER_PAGE) });
         }
       });
 
@@ -204,9 +191,7 @@ const SalesScreen = () => {
 
   /* ---------- DEFAULT LAST PAGE ---------- */
   useEffect(() => {
-    if (salesLoaded && totalPages > 0) {
-      setCurrentPage(totalPages);
-    }
+    if (salesLoaded && totalPages > 0) setCurrentPage(totalPages);
   }, [salesLoaded, totalPages]);
 
   useEffect(() => {
@@ -247,6 +232,7 @@ const SalesScreen = () => {
   const deleteInvoice = async (sale) => {
     setDeleting(true);
     try {
+      // 1️⃣ Restore stock first
       for (const item of sale.items) {
         const stockRef = ref(db, `stocks/${item.dateKey}/${item.stockId}`);
         await runTransaction(stockRef, (current) => {
@@ -255,15 +241,16 @@ const SalesScreen = () => {
           const sold = Number(item.box || 0) * p;
           const total = (current.boxes || 0) * p + (current.pieces || 0);
           const newTotal = total + sold;
-          return {
-            ...current,
-            boxes: Math.floor(newTotal / p),
-            pieces: newTotal % p,
-          };
+          return { ...current, boxes: Math.floor(newTotal / p), pieces: newTotal % p };
         });
       }
-      await set(ref(db, `sales/${sale._dateKey}/${sale._invoiceKey}`), null);
+
+      // 2️⃣ Delete invoice using the correct Firebase key
+      await set(ref(db, `sales/${sale._firebaseDateKey}/${sale._invoiceKey}`), null);
+
       setInvoiceToDelete(null);
+    } catch (err) {
+      console.error("Delete failed:", err);
     } finally {
       setDeleting(false);
     }
@@ -358,42 +345,37 @@ const SalesScreen = () => {
             ) : (
               paginatedSales.map((sale) => {
                 const party = partiesMap[sale.partyId] || {};
-
-                const invoiceTotal = round2(
-                  sale.items.reduce((sum, i) => sum + Number(i.total || 0), 0)
-                );
+                const invoiceTotal = round2(sale.items.reduce((sum, i) => sum + Number(i.total || 0), 0));
 
                 return (
                   <tr key={sale._invoiceKey} className="hover:bg-gray-50">
                     <td className="border p-2">{formatDate(sale.createdAt)}</td>
-
                     <td
                       className="border p-2 text-blue-600 underline cursor-pointer"
-                      onClick={() =>
-                        navigate("/sales/view-invoice", { state: sale })
-                      }
+                      onClick={() => navigate("/sales/view-invoice", { state: sale })}
                     >
                       {sale.invoiceNumber}
                     </td>
-
                     <td className="border p-2">{party.name || "-"}</td>
                     <td className="border p-2">{party.city || "-"}</td>
+                    <td className="border p-2">{warehousesMap[sale.warehouseId] || "-"}</td>
+                    <td className="border p-2 font-medium">{invoiceTotal.toFixed(2)}</td>
                     <td className="border p-2">
-                      {warehousesMap[sale.warehouseId] || "-"}
-                    </td>
-
-                    <td className="border p-2 font-medium">
-                      {invoiceTotal.toFixed(2)}
-                    </td>
-
-                    <td className="border p-2">
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => setInvoiceToDelete(sale)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {invoiceToDelete?._invoiceKey === sale._invoiceKey ? (
+                        <div className="flex gap-2 justify-center items-center">
+                          <span>Are you sure?</span>
+                          <Button size="sm" variant="destructive" onClick={() => deleteInvoice(sale)} disabled={deleting}>
+                            {deleting ? "Deleting..." : "Yes"}
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => setInvoiceToDelete(null)} disabled={deleting}>
+                            No
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button size="sm" variant="destructive" onClick={() => setInvoiceToDelete(sale)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -406,27 +388,11 @@ const SalesScreen = () => {
       {/* PAGINATION */}
       {totalPages > 1 && (
         <div className="flex justify-center gap-3">
-          <Button
-            size="sm"
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage((p) => p - 1)}
-          >
-            Prev
-          </Button>
-          <span>
-            Page {currentPage} of {totalPages}
-          </span>
-          <Button
-            size="sm"
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage((p) => p + 1)}
-          >
-            Next
-          </Button>
+          <Button size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>Prev</Button>
+          <span>Page {currentPage} of {totalPages}</span>
+          <Button size="sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)}>Next</Button>
         </div>
       )}
-
-      <p6>Total, Centering Pending.</p6>
     </div>
   );
 };
