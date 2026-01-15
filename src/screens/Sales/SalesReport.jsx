@@ -16,10 +16,18 @@ const SalesReport = () => {
   const [totalsMap, setTotalsMap] = useState({}); // category -> total boxes
   const [loading, setLoading] = useState(true);
 
+  const getLocalDateKey = (date) => {
+    const d = new Date(date);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
   /* ---------- FETCH CATEGORIES BY DATE ---------- */
   useEffect(() => {
     const salesRef = ref(db, "sales");
-    const selectedDateStr = selectedDate.toISOString().slice(0, 10);
+    const selectedDateStr = getLocalDateKey(selectedDate);
 
     const unsub = onValue(salesRef, (snapshot) => {
       setLoading(true);
@@ -39,9 +47,7 @@ const SalesReport = () => {
         Object.values(timeNode || {}).forEach((invoice) => {
           if (!invoice?.createdAt || !invoice.items) return;
 
-          const invoiceDate = new Date(invoice.createdAt)
-            .toISOString()
-            .slice(0, 10);
+          const invoiceDate = getLocalDateKey(invoice.createdAt);
 
           if (invoiceDate !== selectedDateStr) return;
 

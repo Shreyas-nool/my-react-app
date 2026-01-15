@@ -332,43 +332,143 @@ const SalesInvoice = () => {
     }
   };
 
+  const getDateOnly = (iso) => {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+};
+
+const mergeItems = (oldItems = [], newItems = []) => {
+  const map = new Map();
+
+  oldItems.forEach(item => {
+    const key = `${item.stockId}_${item.pricePerItem}`;
+    map.set(key, { ...item });
+  });
+
+  newItems.forEach(item => {
+    const key = `${item.stockId}_${item.pricePerItem}`;
+
+    if (map.has(key)) {
+      const existing = map.get(key);
+      const newBox = existing.box + item.box;
+
+      map.set(key, {
+        ...existing,
+        box: newBox,
+        total: round2(newBox * existing.piecesPerBox * existing.pricePerItem),
+      });
+    } else {
+      map.set(key, item);
+    }
+  });
+
+  return Array.from(map.values());
+};
+
+
   const handleCreateSales = async () => {
-    if (!selectedPartyId) return alert("Please select a party.");
-    if (!selectedWarehouseId) return alert("Please select a warehouse.");
-    if (items.length === 0) return alert("Add items first.");
+    if (!selectedPartyId) return toast.error("Select party");
+    if (!selectedWarehouseId) return toast.error("Select warehouse");
+    if (items.length === 0) return toast.error("Add items");
 
     try {
-      let invoiceNumber = invoiceToEdit?.invoiceNumber;
-      let saleRef;
-
+      // ===========================
+      // ✏️ EDIT MODE (NO CHANGE)
+      // ===========================
       if (invoiceToEdit) {
-        // ✅ EDITING EXISTING INVOICE
-        // Use the original Firebase path, do NOT change based on date
-        const originalIsoDateTime = invoiceToEdit.createdAt; // original path key
-        saleRef = ref(db, `sales/${originalIsoDateTime}/invoice-${invoiceNumber}`);
-      } else {
-        // ✅ CREATING NEW INVOICE
-        // Generate new invoice number
-        const counterRef = ref(db, "invoiceCounter");
-        const counterRes = await runTransaction(counterRef, (current) => (Number(current) || 1000) + 1);
-        invoiceNumber = counterRes.snapshot.val();
-        const isoDateTime = formatToISO(createdAt);
-        saleRef = ref(db, `sales/${isoDateTime}/invoice-${invoiceNumber}`);
+        const saleRef = ref(
+          db,
+          `sales/${invoiceToEdit.createdAt}/invoice-${invoiceToEdit.invoiceNumber}`
+        );
+
+        await set(saleRef, {
+          ...invoiceToEdit,
+          items,
+          subtotal,
+          total: subtotal,
+          createdAt: formatToISO(new Date()),
+        });
+
+        toast.success(`Invoice updated! Invoice No: ${invoiceToEdit.invoiceNumber}`);
+        return navigate("/sales", { state: { goToLastPage: true } });
       }
 
-      // Find selected party
+      // ===========================
+      // 🔍 CHECK SAME-DAY INVOICE
+      // ===========================
+      const salesRef = ref(db, "sales");
+      let existingInvoice = null;
+      let existingPath = null;
+
+      await new Promise(resolve => {
+        onValue(
+          salesRef,
+          snap => {
+            const data = snap.val() || {};
+            const todayKey = getDateOnly(createdAt);
+
+            Object.entries(data).forEach(([dateKey, invoices]) => {
+              Object.values(invoices).forEach(inv => {
+                if (
+                  inv.partyId === selectedPartyId &&
+                  getDateOnly(inv.createdAt) === todayKey
+                ) {
+                  existingInvoice = inv;
+                  existingPath = `sales/${dateKey}/invoice-${inv.invoiceNumber}`;
+                }
+              });
+            });
+
+            resolve();
+          },
+          { onlyOnce: true }
+        );
+      });
+
+      // ===========================
+      // 🔁 MERGE INTO EXISTING
+      // ===========================
+      if (existingInvoice) {
+        const mergedItems = mergeItems(existingInvoice.items, items);
+        const mergedSubtotal = mergedItems.reduce(
+          (sum, i) => sum + Number(i.total || 0),
+          0
+        );
+
+        await set(ref(db, existingPath), {
+          ...existingInvoice,
+          items: mergedItems,
+          subtotal: round2(mergedSubtotal),
+          total: round2(mergedSubtotal),
+          createdAt: formatToISO(new Date()),
+        });
+
+        await updateStockAfterSale(items);
+
+        toast.success("Invoice updated (same party, same day)");
+        return navigate("/sales", { state: { goToLastPage: true } });
+      }
+
+      // ===========================
+      // 🆕 CREATE NEW INVOICE
+      // ===========================
+      const counterRef = ref(db, "invoiceCounter");
+      const counterRes = await runTransaction(counterRef, cur => (Number(cur) || 1000) + 1);
+      const invoiceNumber = counterRes.snapshot.val();
+
+      const iso = formatToISO(createdAt);
+      const saleRef = ref(db, `sales/${iso}/invoice-${invoiceNumber}`);
+
       const selectedParty = parties.find(p => p.id === selectedPartyId);
 
-      // Compute due date using party's credit period
       let dueDate = null;
-      if (selectedParty && selectedParty.creditPeriod) {
-        dueDate = new Date(createdAt); // copy invoice date
+      if (selectedParty?.creditPeriod) {
+        dueDate = new Date(createdAt);
         dueDate.setDate(dueDate.getDate() + Number(selectedParty.creditPeriod));
       }
 
-      // Build sale data
-      const saleData = {
-        createdAt: formatToISO(createdAt), // update date even if changed
+      await set(saleRef, {
+        createdAt: iso,
         dueDate: dueDate ? formatToISO(dueDate) : null,
         partyId: selectedPartyId,
         warehouseId: selectedWarehouseId,
@@ -376,28 +476,16 @@ const SalesInvoice = () => {
         subtotal,
         total: subtotal,
         invoiceNumber,
-      };
-
-      // Save to Firebase
-      await set(saleRef, saleData);
-
-      // Update stock only if this is a NEW invoice
-      if (!invoiceToEdit) {
-        await updateStockAfterSale(items);
-      }
-
-      toast.success(
-        invoiceToEdit
-          ? `Invoice updated! Invoice No: ${invoiceNumber}`
-          : `Sale saved! Invoice No: ${invoiceNumber}`
-      );
-
-      navigate("/sales", {
-        state: { goToLastPage: true }
       });
+
+      await updateStockAfterSale(items);
+
+      toast.success(`Sale saved! Invoice No: ${invoiceNumber}`);
+      navigate("/sales", { state: { goToLastPage: true } });
+
     } catch (err) {
       console.error(err);
-      toast.error("Error saving sale.");
+      toast.error("Error saving sale");
     }
   };
 
