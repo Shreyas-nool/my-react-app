@@ -341,7 +341,7 @@ const SalesScreen = () => {
 
       {/* TABLE */}
       <div className="overflow-x-auto">
-        <table className="w-full table-auto border border-gray-300 text-sm">
+        <table className="w-full table-auto border border-gray-300 text-sm text-center">
           <thead className="bg-gray-100">
             <tr>
               <th className="border p-2 cursor-pointer" onClick={() => handleSort("date")}>

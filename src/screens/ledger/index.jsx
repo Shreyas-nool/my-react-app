@@ -184,11 +184,11 @@ export default function Ledger() {
                   <td className="border p-4 font-medium">{party.partyName}</td>
                   <td className="border p-4">{party.city}</td>
                   <td
-                    className={`border p-4 font-semibold ${
-                      party.balance >= 0 ? "text-red-600" : "text-green-600"
+                    className={`border p-2 font-semibold ${
+                      Number(party.balance || 0) >= 0 ? "text-green-600" : "text-red-600"
                     }`}
                   >
-                    {format2(party.balance)}
+                    {Number(party.balance || 0).toFixed(2)}
                   </td>
                 </tr>
               ))
