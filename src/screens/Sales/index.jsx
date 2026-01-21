@@ -76,19 +76,18 @@ const SalesScreen = () => {
       const arr = [];
 
       Object.entries(data || {}).forEach(([parentKey, invoices]) => {
-  Object.entries(invoices || {}).forEach(([invoiceKey, sale]) => {
-    const d = new Date(sale.createdAt);
-    const pureDateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        Object.entries(invoices || {}).forEach(([invoiceKey, sale]) => {
+          const d = new Date(sale.createdAt);
+          const pureDateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-    arr.push({
-      ...sale,
-      _dateKey: pureDateKey,          // for UI grouping & sorting
-      _firebaseDateKey: parentKey,    // actual Firebase node path
-      _invoiceKey: invoiceKey,
-    });
-  });
-});
-
+          arr.push({
+            ...sale,
+            _dateKey: pureDateKey,          // for UI grouping & sorting
+            _firebaseDateKey: parentKey,    // actual Firebase node path
+            _invoiceKey: invoiceKey,
+          });
+        });
+      });
 
       setSales(arr);
       setSalesLoaded(true);
@@ -355,7 +354,7 @@ const SalesScreen = () => {
                 Party {renderSortIcon("party")}
               </th>
               <th className="border p-2">Place</th>
-              <th className="border p-2">Warehouse</th>
+              <th className="border p-2">Category</th>
               <th className="border p-2">Total</th>
               <th className="border p-2">Action</th>
             </tr>
@@ -384,7 +383,11 @@ const SalesScreen = () => {
                     </td>
                     <td className="border p-2">{party.name || "-"}</td>
                     <td className="border p-2">{party.city || "-"}</td>
-                    <td className="border p-2">{warehousesMap[sale.warehouseId] || "-"}</td>
+                    <td className="border p-2">
+                      {Array.from(
+                        new Set(sale.items.map((item) => item.category || "Unknown"))
+                      ).join(", ")}
+                    </td>
                     <td className="border p-2 font-medium">{invoiceTotal.toFixed(2)}</td>
                     <td className="border p-2">
                       {invoiceToDelete?._invoiceKey === sale._invoiceKey ? (
@@ -408,16 +411,15 @@ const SalesScreen = () => {
               })
             )}
             {/* TOTAL ROW */}
-<tr className="bg-gray-100 font-bold">
-  <td className="border p-2" colSpan={5} style={{ textAlign: "right" }}>
-    Total
-  </td>
-  <td className="border p-2 font-semibold">
-    {filteredTotal.toFixed(2)}
-  </td>
-  <td className="border p-2"></td>
-</tr>
-
+            <tr className="bg-gray-100 font-bold">
+              <td className="border p-2" colSpan={5} style={{ textAlign: "right" }}>
+                Total
+              </td>
+              <td className="border p-2 font-semibold">
+                {filteredTotal.toFixed(2)}
+              </td>
+              <td className="border p-2"></td>
+            </tr>
           </tbody>
         </table>
       </div>
