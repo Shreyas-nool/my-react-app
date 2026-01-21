@@ -270,11 +270,9 @@ export default function AddPayment() {
       // reset form (optional but recommended)
       setAmount("");
       setNote("");
-      setFromType("");
       setToType("");
       setFromEntity(null);
       setToEntity(null);
-      setDate(new Date());
       
     } catch (err) {
       console.error(err);

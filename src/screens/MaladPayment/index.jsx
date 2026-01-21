@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
-import { ref, onValue, off, get, update } from "firebase/database";
+import { ref, onValue, off, get, update, remove } from "firebase/database";
 import { Button } from "../../components/ui/button";
 import { ArrowLeft, Plus } from "lucide-react";
 import DatePicker from "react-datepicker";
@@ -22,6 +22,17 @@ const BankLedger = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [accountExists, setAccountExists] = useState(null); // null = loading, false = doesn't exist
+
+  const handleDeleteExpense = async (e) => {
+  if (!window.confirm("Delete this expense?")) return;
+
+  const expenseRef = ref(
+    db,
+    `expenses/${e.category}/${BANK_NAME}/${e.id}`
+  );
+
+  await remove(expenseRef);
+};
 
   // ---------------- CHECK IF ACCOUNT EXISTS ----------------
   useEffect(() => {
@@ -116,6 +127,8 @@ const BankLedger = () => {
             seen.add(id);
             const amt = Number(e.amount || 0);
             temp.push({
+              id,                 // 👈 expense id
+              category: _,        // 👈 category (account / bank / etc)
               date: e.date || new Date().toISOString(),
               type: "Expense",
               amount: -amt,
@@ -248,6 +261,7 @@ const BankLedger = () => {
               <th className="border p-3">Notes</th>
               <th className="border p-3">Amount</th>
               <th className="border p-3">Balance</th>
+              <th className="border p-3">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -263,6 +277,7 @@ const BankLedger = () => {
               >
                 {openingBalance.toFixed(2)}
               </td>
+              <td className="border p-3"></td>
             </tr>
 
             {/* LEDGER ENTRIES */}
@@ -295,6 +310,17 @@ const BankLedger = () => {
                   >
                     {e.runningBalance.toFixed(2)}
                   </td>
+                  <td className="border p-3">
+                    {e.type === "Expense" && (
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleDeleteExpense(e)}
+                      >
+                        Delete
+                      </Button>
+                    )}
+                  </td>
                 </tr>
               ))
             )}
@@ -312,6 +338,7 @@ const BankLedger = () => {
                 {balance.toFixed(2)}
               </td>
             </tr>
+            
           </tbody>
         </table>
       </div>

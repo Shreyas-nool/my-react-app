@@ -322,10 +322,23 @@ const PartyLedgerScreen = () => {
                   </td>
                 <td className="border p-3">{t.source}</td>
                 <td className="border p-3">{t.notes}</td>
-                <td className="border p-3">{t.amount.toFixed(2)}</td>
-                <td className="border p-3">
+
+                <td
+                  className={`border p-3 font-semibold ${
+                    t.amount < 0 ? "text-red-600" : "text-green-600"
+                  }`}
+                >
+                  {Math.abs(t.amount).toFixed(2)}
+                </td>
+
+                <td
+                  className={`border p-3 font-semibold ${
+                    t.runningBalance < 0 ? "text-red-600" : "text-green-600"
+                  }`}
+                >
                   {t.runningBalance.toFixed(2)}
                 </td>
+
               </tr>
             ))}
 
@@ -333,7 +346,11 @@ const PartyLedgerScreen = () => {
               <td colSpan={6} className="border p-3 text-right">
                 Current Balance
               </td>
-              <td className="border p-3">
+              <td
+                className={`border p-3 font-bold ${
+                  ledgerData.balance < 0 ? "text-red-600" : "text-green-600"
+                }`}
+              >
                 {ledgerData.balance.toFixed(2)}
               </td>
             </tr>
