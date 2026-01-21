@@ -54,9 +54,16 @@ const PaymentScreen = () => {
         });
       }
 
-      const sorted = Array.from(map.values()).sort(
-        (a, b) => b.createdAt - a.createdAt
-      );
+      const sorted = Array.from(map.values()).sort((a, b) => {
+        // Sort by date (newest first)
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+
+        if (dateB !== dateA) return dateB - dateA;
+
+        // If same date, sort by createdAt
+        return b.createdAt - a.createdAt;
+      });
 
       setPayments(sorted);
     });

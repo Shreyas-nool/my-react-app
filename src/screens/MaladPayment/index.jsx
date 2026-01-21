@@ -182,11 +182,32 @@ const BankLedger = () => {
     });
   }, [entries, fromDate, toDate]);
 
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-  const pageData = filtered.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+// ---------------- DATE-AWARE PAGINATION ----------------
+const pages = useMemo(() => {
+  const grouped = {};
+  filtered.forEach((e) => {
+    const d = new Date(e.date);
+    const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+    if (!grouped[dateKey]) grouped[dateKey] = [];
+    grouped[dateKey].push(e);
+  });
+
+  const result = [];
+  Object.keys(grouped)
+    .sort()
+    .forEach((dateKey) => {
+      const list = grouped[dateKey];
+      for (let i = 0; i < list.length; i += ITEMS_PER_PAGE) {
+        result.push({ dateKey, entries: list.slice(i, i + ITEMS_PER_PAGE) });
+      }
+    });
+
+  return result;
+}, [filtered]);
+
+const totalPages = pages.length;
+const pageData = pages[currentPage - 1]?.entries || [];
 
   if (loading) return <div className="p-4">Loading...</div>;
   if (!accountExists)
@@ -253,7 +274,7 @@ const BankLedger = () => {
       {/* TABLE */}
       <div className="overflow-x-auto border rounded shadow bg-white">
         <table className="w-full text-center border-collapse">
-          <thead className="bg-gray-100">
+          <thead className="bg-gray-100"> 
             <tr>
               <th className="border p-3">Date</th>
               <th className="border p-3">Type</th>
@@ -266,6 +287,7 @@ const BankLedger = () => {
           </thead>
           <tbody>
             {/* OPENING BALANCE */}
+            {currentPage === 1 && (
             <tr className="bg-gray-100 font-bold">
               <td colSpan={5} className="border p-3 text-right">
                 Opening Balance
@@ -279,6 +301,7 @@ const BankLedger = () => {
               </td>
               <td className="border p-3"></td>
             </tr>
+            )}
 
             {/* LEDGER ENTRIES */}
             {pageData.length === 0 ? (

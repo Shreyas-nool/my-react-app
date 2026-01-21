@@ -166,7 +166,10 @@ export default function AddExpense() {
       );
 
       alert("✅ Expense saved successfully");
-      navigate(-1);
+
+      setCategory("");
+      setEntity(null);
+      setDate(new Date());
 
     } catch (err) {
       console.error(err);
