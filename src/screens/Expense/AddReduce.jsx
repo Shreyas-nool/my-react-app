@@ -18,7 +18,7 @@ import {
   CommandEmpty,
 } from "../../components/ui/command";
 import { db } from "../../firebase";
-import { ref, get, set } from "firebase/database";
+import { ref, get, set, update } from "firebase/database";
 import { cn } from "../../lib/utils";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -43,9 +43,13 @@ export default function AddExpense() {
 
   /* ---------------- LOCK FROM LEDGER ---------------- */
   useEffect(() => {
-    if (state?.lockCategory && state?.lockEntity) {
+    if (
+      state?.lockCategory &&
+      state?.lockEntity &&
+      typeof state.lockEntity === "object"
+    ) {
       setCategory(state.lockCategory);
-      setEntity(state.lockEntity); // { id, name }
+      setEntity(state.lockEntity);
     }
   }, [state]);
 
@@ -111,10 +115,9 @@ export default function AddExpense() {
       amount: expenseAmount,
       expenseFor,
       date: date.toISOString(),
-      createdAt: Date.now(),
+      createdAt: new Date().toISOString(),
       category,
-      entityId: entity.id,
-      entityName: entity.name,
+      entity: entity.name, // ✅ EXACTLY AS YOU WANT
     };
 
     const baseNode =
@@ -158,7 +161,7 @@ export default function AddExpense() {
 
       // 5️⃣ Save global expense (for reports)
       await set(
-        ref(db, `expenses/${category}/${entity.id}/${expenseID}`),
+        ref(db, `expenses/${category}/${entity.name}/${expenseID}`),
         expenseEntry
       );
 

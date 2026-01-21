@@ -216,7 +216,13 @@ const BankLedger = () => {
         <Button
           onClick={() =>
             navigate("/expense/create-expense", {
-              state: { lockCategory: "account", lockEntity: BANK_NAME },
+              state: {
+                lockCategory: "account",
+                lockEntity: {
+                  id: BANK_NAME,
+                  name: BANK_NAME,
+                },
+              },
             })
           }
           className="h-9 px-3 flex items-center gap-1"
