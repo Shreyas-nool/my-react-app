@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import {
   ArrowLeft,
@@ -27,8 +27,17 @@ const SalesScreen = () => {
   const [warehousesMap, setWarehousesMap] = useState({});
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [fromDate, setFromDate] = useState(null);
-  const [toDate, setToDate] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const fromParam = searchParams.get("from");
+  const toParam = searchParams.get("to");
+
+  const [fromDate, setFromDate] = useState(
+    fromParam ? new Date(fromParam) : null
+  );
+  const [toDate, setToDate] = useState(
+    toParam ? new Date(toParam) : null
+  );
 
   const [sortConfig, setSortConfig] = useState({
     key: "createdAt",
@@ -273,15 +282,32 @@ const SalesScreen = () => {
         <div className="absolute left-12 flex gap-2">
           <DatePicker
             selected={fromDate}
-            onChange={setFromDate}
+            onChange={(date) => {
+              setFromDate(date);
+              setSearchParams((prev) => {
+                if (date) prev.set("from", date.toISOString());
+                else prev.delete("from");
+                return prev;
+              });
+            }}
             placeholderText="From"
             className="border px-2 py-1 text-sm w-28"
+            dateFormat="dd-MM-yyyy"
           />
+
           <DatePicker
             selected={toDate}
-            onChange={setToDate}
+            onChange={(date) => {
+              setToDate(date);
+              setSearchParams((prev) => {
+                if (date) prev.set("to", date.toISOString());
+                else prev.delete("to");
+                return prev;
+              });
+            }}
             placeholderText="To"
             className="border px-2 py-1 text-sm w-28"
+            dateFormat="dd-MM-yyyy"
           />
         </div>
 

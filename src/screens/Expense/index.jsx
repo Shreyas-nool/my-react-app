@@ -18,12 +18,29 @@ const ExpenseScreen = () => {
   const [searchText, setSearchText] = useState("");
 
   const [total, setTotal] = useState(0);
+  const [banksMap, setBanksMap] = useState({});
+
+  /* ---------------- FETCH BANKS ---------------- */
+  useEffect(() => {
+    const bankRef = ref(db, "banks");
+
+    return onValue(bankRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      const map = {};
+
+      Object.entries(data).forEach(([id, bank]) => {
+        map[id] = bank.bankName;
+      });
+
+      setBanksMap(map);
+    });
+  }, []);
 
   /* ---------------- FETCH EXPENSES ---------------- */
   useEffect(() => {
     const expRef = ref(db, "expenses");
 
-    onValue(expRef, (snapshot) => {
+    return onValue(expRef, (snapshot) => {
       const data = snapshot.val() || {};
       let all = [];
 
@@ -35,7 +52,7 @@ const ExpenseScreen = () => {
             all.push({
               ...exp,
               category,
-              entity,
+              entity, // bankId
               _path: `expenses/${category}/${entity}/${id}`,
             });
           });
@@ -69,7 +86,10 @@ const ExpenseScreen = () => {
 
     setFiltered(data);
 
-    const sum = data.reduce((acc, cur) => acc + Number(cur.amount || 0), 0);
+    const sum = data.reduce(
+      (acc, cur) => acc + Number(cur.amount || 0),
+      0
+    );
     setTotal(sum);
   }, [fromDate, toDate, searchText, expenses]);
 
@@ -117,13 +137,10 @@ const ExpenseScreen = () => {
         </Button>
       </div>
 
-      {/* TITLE + TOTAL (CENTER) + SEARCH (RIGHT) */}
+      {/* TITLE + TOTAL + SEARCH */}
       <div className="grid grid-cols-3 items-center w-full">
-
-        {/* LEFT EMPTY (BALANCE COLUMN) */}
         <div />
 
-        {/* CENTER TITLE + TOTAL */}
         <div className="text-center">
           <h2 className="text-xl font-semibold">Expenses</h2>
           <p className="text-red-600 font-semibold">
@@ -131,7 +148,6 @@ const ExpenseScreen = () => {
           </p>
         </div>
 
-        {/* RIGHT SEARCH */}
         <div className="flex justify-end">
           <input
             type="text"
@@ -141,7 +157,6 @@ const ExpenseScreen = () => {
             className="border rounded px-3 py-2 text-sm w-64"
           />
         </div>
-
       </div>
 
       {/* TABLE */}
@@ -176,7 +191,9 @@ const ExpenseScreen = () => {
                   </td>
                   <td className="border p-3">{exp.expenseFor}</td>
                   <td className="border p-3 capitalize">{exp.category}</td>
-                  <td className="border p-3">{exp.entity}</td>
+                  <td className="border p-3">
+                    {banksMap[exp.entity] || exp.entity}
+                  </td>
                   <td className="border p-3">
                     <button
                       onClick={() => handleDelete(exp)}

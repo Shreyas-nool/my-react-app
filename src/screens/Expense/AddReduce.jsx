@@ -100,13 +100,18 @@ export default function AddExpense() {
     }
 
     const expenseAmount = Number(amount);
+    if (expenseAmount <= 0) {
+      alert("Invalid amount");
+      return;
+    }
+
     const expenseID = Date.now();
 
     const expenseEntry = {
       amount: expenseAmount,
       expenseFor,
       date: date.toISOString(),
-      createdAt: new Date().toISOString(),
+      createdAt: Date.now(),
       category,
       entityId: entity.id,
       entityName: entity.name,
@@ -120,30 +125,46 @@ export default function AddExpense() {
         : "accounts";
 
     try {
-      /* ---- UPDATE BALANCE ---- */
-      const balRef = ref(db, `${baseNode}/${entity.id}/balance`);
-      const balSnap = await get(balRef);
-      const currentBalance = balSnap.exists()
-        ? Number(balSnap.val())
-        : 0;
+      const bankRef = ref(db, `${baseNode}/${entity.id}`);
 
-      await set(balRef, currentBalance - expenseAmount);
+      // 1️⃣ Get latest balance
+      const snap = await get(bankRef);
+      if (!snap.exists()) {
+        alert("Account not found");
+        return;
+      }
 
-      /* ---- SAVE UNDER ENTITY (CORRECT PLACE) ---- */
+      const data = snap.val();
+      const currentBalance = Number(data.balance || 0);
+
+      // 2️⃣ Validate balance
+      if (currentBalance < expenseAmount) {
+        alert("❌ Insufficient balance");
+        return;
+      }
+
+      const updatedBalance = currentBalance - expenseAmount;
+
+      // 3️⃣ Update balance SAFELY
+      await update(bankRef, {
+        balance: updatedBalance,
+      });
+
+      // 4️⃣ Save expense under entity
       await set(
         ref(db, `${baseNode}/${entity.id}/expenses/${expenseID}`),
         expenseEntry
       );
 
-      /* ---- GLOBAL EXPENSE (OPTIONAL BUT GOOD) ---- */
+      // 5️⃣ Save global expense (for reports)
       await set(
         ref(db, `expenses/${category}/${entity.id}/${expenseID}`),
         expenseEntry
       );
 
       alert("✅ Expense saved successfully");
-
       navigate(-1);
+
     } catch (err) {
       console.error(err);
       alert("❌ Error saving expense");
