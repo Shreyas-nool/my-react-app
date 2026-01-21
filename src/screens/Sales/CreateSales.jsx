@@ -447,6 +447,10 @@ const mergeItems = (oldItems = [], newItems = []) => {
 
         toast.success("Invoice updated (same party, same day)");
         setItems([]);
+        setSubtotal(0);
+        setTotal(0);
+        setInvoiceNumber(null);
+        setDueDate(null);
         return;
       }
 
@@ -483,6 +487,10 @@ const mergeItems = (oldItems = [], newItems = []) => {
 
       toast.success(`Sale saved! Invoice No: ${invoiceNumber}`);
       setItems([]);
+      setSubtotal(0);
+      setTotal(0);
+      setInvoiceNumber(null);
+      setDueDate(null);
 
     } catch (err) {
       console.error(err);
