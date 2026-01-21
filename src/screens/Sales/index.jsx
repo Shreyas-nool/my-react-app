@@ -407,6 +407,17 @@ const SalesScreen = () => {
                 );
               })
             )}
+            {/* TOTAL ROW */}
+<tr className="bg-gray-100 font-bold">
+  <td className="border p-2" colSpan={5} style={{ textAlign: "right" }}>
+    Total
+  </td>
+  <td className="border p-2 font-semibold">
+    {filteredTotal.toFixed(2)}
+  </td>
+  <td className="border p-2"></td>
+</tr>
+
           </tbody>
         </table>
       </div>
