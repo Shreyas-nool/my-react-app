@@ -446,7 +446,8 @@ const mergeItems = (oldItems = [], newItems = []) => {
         await updateStockAfterSale(items);
 
         toast.success("Invoice updated (same party, same day)");
-        return navigate("/sales", { state: { goToLastPage: true } });
+        setItems([]);
+        return;
       }
 
       // ===========================
@@ -481,7 +482,7 @@ const mergeItems = (oldItems = [], newItems = []) => {
       await updateStockAfterSale(items);
 
       toast.success(`Sale saved! Invoice No: ${invoiceNumber}`);
-      navigate("/sales", { state: { goToLastPage: true } });
+      setItems([]);
 
     } catch (err) {
       console.error(err);
