@@ -37,6 +37,10 @@ import AdminPanel from "./screens/Profile/admin/AdminPanel";
 import BankManagement from "./screens/Profile/admin/BankManagement";
 import DefaultAccounts from "./screens/Profile/admin/DefaultAccounts";
 
+// Developer - Profile
+import DeveloperPanel from "./screens/Profile/developer/developerPanel";
+import ErrorsReport from "./screens/Profile/developer/ErrorsReport";
+
 /* =========================================================
    BANK MODULE
    ========================================================= */
@@ -74,6 +78,8 @@ import PrintMultipleInvoices from "./screens/Sales/PrintMultipleInvoices";
 import ViewInvoice from "./screens/Sales/ViewInvoice";
 import SalesReport from "./screens/Sales/SalesReport";
 import CategorySalesReport from "./screens/Sales/CategorySalesReport";
+import CategoryYearGraphReport from "./screens/Sales/CategoryYearGraphReport";
+import SalesAnalysis from "./screens/Sales/SalesAnalysis";
 
 /* =========================================================
    PURCHASE MODULE
@@ -149,6 +155,13 @@ const router = createBrowserRouter([
           { path: "admin/bank-management", element: <BankManagement /> },
           { path: "admin/default-accounts", element: <DefaultAccounts />},
 
+          /* ---------- DEVELOPER ---------- */
+          { path: "/developer", element: <DeveloperPanel /> },
+          {
+            path: "/developer/errors",
+            element: <ErrorsReport />
+          },
+
           /* ---------- PRODUCT ---------- */
           { path: "/product", element: <Product /> },
           { path: "/product/products", element: <ProductList /> },
@@ -185,6 +198,14 @@ const router = createBrowserRouter([
           { path: "/sales/view-invoice", element: <ViewInvoice /> },
           { path: "/sales/report", element: <SalesReport /> },
           { path: "/sales/report/category", element: <CategorySalesReport /> },
+          {
+            path: "/sales/analysis",
+            element: <SalesAnalysis />,
+          },
+          { 
+            path: "/sales/report/yearly-graph", 
+            element: <CategoryYearGraphReport year={new Date().getFullYear()} /> 
+          },
 
           /* ---------- PAYMENTS ---------- */
           { path: "/payment", element: <PaymentScreen /> },
