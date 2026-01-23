@@ -7,6 +7,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { db } from "../../firebase";
 import { ref, get, set } from "firebase/database";
+import { toSafeKey } from "../../lib/safekey";
 
 import {
   Popover,
@@ -185,6 +186,11 @@ export default function AddPayment() {
       return;
     }
 
+    if (!fromEntity || !toEntity) return;
+
+    const fromKey = toSafeKey(fromEntity.name);
+    const toKey = toSafeKey(toEntity.name);
+
     const amt = Number(amount);
     const dateKey = getLocalDateKey(date);
     const txnId = Date.now().toString();
@@ -225,7 +231,7 @@ export default function AddPayment() {
     const savePaymentNode = async () => {
       // From side
       await set(
-        ref(db, `payments/${fromType}/${fromEntity.name}/${dateKey}/${txnId}`),
+        ref(db, `payments/${fromType}/${fromKey}/${dateKey}/${txnId}`),
         {
           txnId,
           fromType,
@@ -241,7 +247,7 @@ export default function AddPayment() {
 
       // To side
       await set(
-        ref(db, `payments/${toType}/${toEntity.name}/${dateKey}/${txnId}`),
+        ref(db, `payments/${toType}/${toKey}/${dateKey}/${txnId}`),
         {
           txnId,
           fromType,
@@ -270,8 +276,6 @@ export default function AddPayment() {
       // reset form (optional but recommended)
       setAmount("");
       setNote("");
-      setFromEntity(null);
-      setToEntity(null);
       
     } catch (err) {
       console.error(err);
