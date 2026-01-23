@@ -21,18 +21,14 @@ const BankLedger = () => {
   const [toDate, setToDate] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [accountExists, setAccountExists] = useState(null); // null = loading, false = doesn't exist
+  const [accountExists, setAccountExists] = useState(null);
 
   const handleDeleteExpense = async (e) => {
-  if (!window.confirm("Delete this expense?")) return;
+    if (!window.confirm("Delete this expense?")) return;
 
-  const expenseRef = ref(
-    db,
-    `expenses/${e.category}/${BANK_NAME}/${e.id}`
-  );
-
-  await remove(expenseRef);
-};
+    const expenseRef = ref(db, `expenses/${e.category}/${BANK_NAME}/${e.id}`);
+    await remove(expenseRef);
+  };
 
   // ---------------- CHECK IF ACCOUNT EXISTS ----------------
   useEffect(() => {
@@ -40,7 +36,7 @@ const BankLedger = () => {
       setLoading(true);
       const accountSnap = await get(ref(db, `accounts/${BANK_NAME}`));
       if (!accountSnap.exists()) {
-        setAccountExists(false); // account does not exist
+        setAccountExists(false);
         setLoading(false);
         return;
       }
@@ -54,7 +50,7 @@ const BankLedger = () => {
 
   // ---------------- FETCH LEDGER DATA ----------------
   useEffect(() => {
-    if (!accountExists) return; // only fetch if account exists
+    if (!accountExists) return;
     setLoading(true);
 
     const purchaseRef = ref(db, `phurchase/${BANK_NAME}`);
@@ -127,8 +123,8 @@ const BankLedger = () => {
             seen.add(id);
             const amt = Number(e.amount || 0);
             temp.push({
-              id,                 // 👈 expense id
-              category: _,        // 👈 category (account / bank / etc)
+              id,
+              category: _,
               date: e.date || new Date().toISOString(),
               type: "Expense",
               amount: -amt,
@@ -141,7 +137,7 @@ const BankLedger = () => {
 
       // ---------- SORT + RUNNING BALANCE ----------
       temp.sort((a, b) => new Date(a.date) - new Date(b.date));
-      let rb = openingBalance; // start from opening balance
+      let rb = openingBalance;
       const finalEntries = temp.map((e) => {
         rb += e.amount;
         return { ...e, runningBalance: round2(rb) };
@@ -156,7 +152,6 @@ const BankLedger = () => {
         updatedAt: new Date().toISOString(),
       });
 
-      setCurrentPage(Math.ceil(finalEntries.length / ITEMS_PER_PAGE) || 1);
       setLoading(false);
     };
 
@@ -173,41 +168,59 @@ const BankLedger = () => {
     };
   }, [accountExists, openingBalance]);
 
+  // ---------------- DATE KEY ----------------
+  const getDateKey = (d) => {
+    const date = new Date(d);
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  // ---------------- FILTER ----------------
   const filtered = useMemo(() => {
+    const fromKey = fromDate ? getDateKey(fromDate) : null;
+    const toKey = toDate ? getDateKey(toDate) : null;
+
     return entries.filter((e) => {
-      const d = new Date(e.date);
-      if (fromDate && d < fromDate) return false;
-      if (toDate && d > toDate) return false;
+      const key = getDateKey(e.date);
+      if (fromKey && key < fromKey) return false;
+      if (toKey && key > toKey) return false;
       return true;
     });
   }, [entries, fromDate, toDate]);
 
-// ---------------- DATE-AWARE PAGINATION ----------------
-const pages = useMemo(() => {
-  const grouped = {};
-  filtered.forEach((e) => {
-    const d = new Date(e.date);
-    const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  // ---------------- PAGINATION ----------------
+  const pages = useMemo(() => {
+    // Filter mode = single page
+    if (fromDate || toDate) {
+      return filtered.length ? [{ dateKey: "filtered", entries: filtered }] : [];
+    }
 
-    if (!grouped[dateKey]) grouped[dateKey] = [];
-    grouped[dateKey].push(e);
-  });
-
-  const result = [];
-  Object.keys(grouped)
-    .sort()
-    .forEach((dateKey) => {
-      const list = grouped[dateKey];
-      for (let i = 0; i < list.length; i += ITEMS_PER_PAGE) {
-        result.push({ dateKey, entries: list.slice(i, i + ITEMS_PER_PAGE) });
-      }
+    // Normal mode = one page per date
+    const grouped = {};
+    filtered.forEach((e) => {
+      const dateKey = getDateKey(e.date);
+      if (!grouped[dateKey]) grouped[dateKey] = [];
+      grouped[dateKey].push(e);
     });
 
-  return result;
-}, [filtered]);
+    return Object.keys(grouped)
+      .sort()
+      .map((dateKey) => ({ dateKey, entries: grouped[dateKey] }));
+  }, [filtered, fromDate, toDate]);
 
-const totalPages = pages.length;
-const pageData = pages[currentPage - 1]?.entries || [];
+  // ---------------- OPEN LAST PAGE / FILTER PAGE ----------------
+  useEffect(() => {
+    if (fromDate || toDate) {
+      setCurrentPage(1);
+      return;
+    }
+    setCurrentPage(pages.length || 1);
+  }, [pages.length, fromDate, toDate]);
+
+  const totalPages = pages.length;
+  const pageData = pages[currentPage - 1]?.entries || [];
 
   if (loading) return <div className="p-4">Loading...</div>;
   if (!accountExists)
@@ -274,7 +287,7 @@ const pageData = pages[currentPage - 1]?.entries || [];
       {/* TABLE */}
       <div className="overflow-x-auto border rounded shadow bg-white">
         <table className="w-full text-center border-collapse">
-          <thead className="bg-gray-100"> 
+          <thead className="bg-gray-100">
             <tr>
               <th className="border p-3">Date</th>
               <th className="border p-3">Type</th>
@@ -286,27 +299,27 @@ const pageData = pages[currentPage - 1]?.entries || [];
             </tr>
           </thead>
           <tbody>
-            {/* OPENING BALANCE */}
-            {currentPage === 1 && (
-            <tr className="bg-gray-100 font-bold">
-              <td colSpan={5} className="border p-3 text-right">
-                Opening Balance
-              </td>
-              <td
-                className={`border p-3 ${
-                  openingBalance >= 0 ? "text-green-600" : "text-red-600"
-                }`}
-              >
-                {openingBalance.toFixed(2)}
-              </td>
-              <td className="border p-3"></td>
-            </tr>
+            {/* OPENING BALANCE (hide in filter mode) */}
+            {!fromDate && !toDate && currentPage === 1 && (
+              <tr className="bg-gray-100 font-bold">
+                <td colSpan={5} className="border p-3 text-right">
+                  Opening Balance
+                </td>
+                <td
+                  className={`border p-3 ${
+                    openingBalance >= 0 ? "text-green-600" : "text-red-600"
+                  }`}
+                >
+                  {openingBalance.toFixed(2)}
+                </td>
+                <td className="border p-3"></td>
+              </tr>
             )}
 
             {/* LEDGER ENTRIES */}
             {pageData.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-6">
+                <td colSpan={7} className="p-6">
                   No entries
                 </td>
               </tr>
@@ -348,20 +361,22 @@ const pageData = pages[currentPage - 1]?.entries || [];
               ))
             )}
 
-            {/* CURRENT BALANCE */}
-            <tr className="bg-gray-100 font-bold">
-              <td colSpan={5} className="border p-3 text-right">
-                Current Balance
-              </td>
-              <td
-                className={`border p-3 ${
-                  balance >= 0 ? "text-green-600" : "text-red-600"
-                }`}
-              >
-                {balance.toFixed(2)}
-              </td>
-            </tr>
-            
+            {/* CURRENT BALANCE (hide in filter mode) */}
+            {!fromDate && !toDate && (
+              <tr className="bg-gray-100 font-bold">
+                <td colSpan={5} className="border p-3 text-right">
+                  Current Balance
+                </td>
+                <td
+                  className={`border p-3 ${
+                    balance >= 0 ? "text-green-600" : "text-red-600"
+                  }`}
+                >
+                  {balance.toFixed(2)}
+                </td>
+                <td className="border p-3"></td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

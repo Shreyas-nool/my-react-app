@@ -14,7 +14,7 @@ import { ref, onValue, set, runTransaction } from "firebase/database";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
-const ITEMS_PER_PAGE = 20;
+const ITEMS_PER_PAGE = 99;
 
 const SalesScreen = () => {
   const navigate = useNavigate();
@@ -32,12 +32,45 @@ const SalesScreen = () => {
   const fromParam = searchParams.get("from");
   const toParam = searchParams.get("to");
 
-  const [fromDate, setFromDate] = useState(
-    fromParam ? new Date(fromParam) : null
-  );
-  const [toDate, setToDate] = useState(
-    toParam ? new Date(toParam) : null
-  );
+  const isValidDate = (d) => d instanceof Date && !isNaN(d.getTime());
+
+  const parseDateKey = (key) => {
+    if (!key) return null;
+
+    // ignore string "null" or "undefined"
+    if (key === "null" || key === "undefined") return null;
+
+    // if it contains T => ISO string
+    if (key.includes("T")) {
+      const d = new Date(key);
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    // YYYY-MM-DD format
+    const [y, m, d] = key.split("-");
+    if (!y || !m || !d) return null;
+
+    const date = new Date(Number(y), Number(m) - 1, Number(d));
+    return isNaN(date.getTime()) ? null : date;
+  };
+
+  const [fromDate, setFromDate] = useState(parseDateKey(fromParam));
+  const [toDate, setToDate] = useState(parseDateKey(toParam));
+
+  const toDateKey = (d) => {
+    if (!d) return null;
+    const date = new Date(d);
+    if (isNaN(date.getTime())) return null;
+
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  };
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams.toString());
+    if (fromParam === "null" || fromParam === "undefined") next.delete("from");
+    if (toParam === "null" || toParam === "undefined") next.delete("to");
+    if (next.toString() !== searchParams.toString()) setSearchParams(next);
+  }, [fromParam, toParam]);
 
   const [sortConfig, setSortConfig] = useState({
     key: "createdAt",
@@ -78,12 +111,14 @@ const SalesScreen = () => {
       Object.entries(data || {}).forEach(([parentKey, invoices]) => {
         Object.entries(invoices || {}).forEach(([invoiceKey, sale]) => {
           const d = new Date(sale.createdAt);
-          const pureDateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+          const pureDateKey = sale.dateKey
+            ? sale.dateKey.replace("date-", "")   // <-- important fix
+            : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
           arr.push({
             ...sale,
-            _dateKey: pureDateKey,          // for UI grouping & sorting
-            _firebaseDateKey: parentKey,    // actual Firebase node path
+            _dateKey: pureDateKey,
+            _firebaseDateKey: parentKey,
             _invoiceKey: invoiceKey,
           });
         });
@@ -123,22 +158,28 @@ const SalesScreen = () => {
   }, []);
 
   /* ---------- FILTER ---------- */
+  const getOnlyDate = (d) => {
+    const date = new Date(d);
+    date.setHours(0, 0, 0, 0);
+    return date.getTime();
+  };
+
   const filteredSales = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+
+    const fromKey = fromDate
+      ? `${fromDate.getFullYear()}-${String(fromDate.getMonth() + 1).padStart(2, "0")}-${String(fromDate.getDate()).padStart(2, "0")}`
+      : null;
+
+    const toKey = toDate
+      ? `${toDate.getFullYear()}-${String(toDate.getMonth() + 1).padStart(2, "0")}-${String(toDate.getDate()).padStart(2, "0")}`
+      : null;
+
     return sales.filter((sale) => {
-      const q = searchQuery.toLowerCase();
       const party = partiesMap[sale.partyId] || {};
 
-      const saleDate = new Date(sale.createdAt);
-      if (fromDate) {
-        const f = new Date(fromDate);
-        f.setHours(0, 0, 0, 0);
-        if (saleDate < f) return false;
-      }
-      if (toDate) {
-        const t = new Date(toDate);
-        t.setHours(23, 59, 59, 999);
-        if (saleDate > t) return false;
-      }
+      if (fromKey && sale._dateKey < fromKey) return false;
+      if (toKey && sale._dateKey > toKey) return false;
 
       return (
         sale.invoiceNumber?.toString().includes(q) ||
@@ -195,19 +236,31 @@ const SalesScreen = () => {
   }, [sortedSales]);
 
   const totalPages = pages.length;
-  const paginatedSales = pages[currentPage - 1]?.invoices || [];
+
+  /* ---------- PAGINATED SALES ---------- */
+  const paginatedSales = useMemo(() => {
+    // If filtering by date and sales -> show ALL results in one page
+    if (fromDate || toDate || searchQuery.trim() !== "") {
+      return sortedSales;
+    }
+
+    // otherwise normal pagination
+    return pages[currentPage - 1]?.invoices || [];
+  }, [sortedSales, fromDate, toDate, pages, currentPage]);
 
   /* ---------- DEFAULT LAST PAGE ---------- */
   useEffect(() => {
-    if (salesLoaded && totalPages > 0) setCurrentPage(totalPages);
-  }, [salesLoaded, totalPages]);
+    if (!fromDate && !toDate && salesLoaded && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [salesLoaded, totalPages, fromDate, toDate]);
 
   useEffect(() => {
-    if (!pageInitialized && salesLoaded && totalPages > 0) {
+    if (!fromDate && !toDate && !pageInitialized && salesLoaded && totalPages > 0) {
       setCurrentPage(totalPages);
       setPageInitialized(true);
     }
-  }, [salesLoaded, totalPages, pageInitialized]);
+  }, [salesLoaded, totalPages, pageInitialized, fromDate, toDate]);
 
   /* ---------- TOTAL ---------- */
   const filteredTotal = round2(
@@ -280,33 +333,37 @@ const SalesScreen = () => {
 
         <div className="absolute left-12 flex gap-2">
           <DatePicker
-            selected={fromDate}
+            selected={isValidDate(fromDate) ? fromDate : null}
             onChange={(date) => {
               setFromDate(date);
               setSearchParams((prev) => {
-                if (date) prev.set("from", date.toISOString());
-                else prev.delete("from");
-                return prev;
+                const next = new URLSearchParams(prev.toString());
+                if (date) next.set("from", toDateKey(date));
+                else next.delete("from");
+                return next;
               });
             }}
             placeholderText="From"
             className="border px-2 py-1 text-sm w-28"
             dateFormat="dd-MM-yyyy"
+            isClearable
           />
 
           <DatePicker
-            selected={toDate}
+            selected={isValidDate(toDate) ? toDate : null}
             onChange={(date) => {
               setToDate(date);
               setSearchParams((prev) => {
-                if (date) prev.set("to", date.toISOString());
-                else prev.delete("to");
-                return prev;
+                const next = new URLSearchParams(prev.toString());
+                if (date) next.set("to", toDateKey(date));
+                else next.delete("to");
+                return next;
               });
             }}
             placeholderText="To"
             className="border px-2 py-1 text-sm w-28"
             dateFormat="dd-MM-yyyy"
+            isClearable
           />
         </div>
 
@@ -425,7 +482,7 @@ const SalesScreen = () => {
       </div>
 
       {/* PAGINATION */}
-      {totalPages > 1 && (
+      {!fromDate && !toDate && !searchQuery && totalPages > 1 && (
         <div className="flex justify-center gap-3">
           <Button size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>Prev</Button>
           <span>Page {currentPage} of {totalPages}</span>

@@ -147,7 +147,6 @@ const BankLedger = () => {
         updatedAt: new Date().toISOString(),
       });
 
-      setCurrentPage(Math.ceil(final.length / ITEMS_PER_PAGE) || 1);
       setLoading(false);
     };
 
@@ -165,20 +164,71 @@ const BankLedger = () => {
   }, [accountExists, openingBalance]);
 
   /* FILTER + PAGINATION */
+  const getDateKey = (d) => {
+    const date = new Date(d);
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
   const filtered = useMemo(() => {
+    const fromKey = fromDate ? getDateKey(fromDate) : null;
+    const toKey = toDate ? getDateKey(toDate) : null;
+
     return entries.filter((e) => {
-      const d = new Date(e.date);
-      if (fromDate && d < fromDate) return false;
-      if (toDate && d > toDate) return false;
+      const key = getDateKey(e.date);
+
+      if (fromKey && key < fromKey) return false;
+      if (toKey && key > toKey) return false;
       return true;
     });
   }, [entries, fromDate, toDate]);
 
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-  const pageData = filtered.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+  const pages = useMemo(() => {
+    // FILTER MODE → single page
+    if (fromDate || toDate) {
+      return filtered.length ? [{ dateKey: "filtered", entries: filtered }] : [];
+    }
+
+    // NORMAL MODE → one page per date
+    const grouped = {};
+    filtered.forEach((e) => {
+      const dateKey = getDateKey(e.date);
+      if (!grouped[dateKey]) grouped[dateKey] = [];
+      grouped[dateKey].push(e);
+    });
+
+    return Object.keys(grouped)
+      .sort()
+      .map((dateKey) => ({
+        dateKey,
+        entries: grouped[dateKey],
+      }));
+  }, [filtered, fromDate, toDate]);
+
+  useEffect(() => {
+    // If filter is active → always start from page 1
+    if (fromDate || toDate) {
+      setCurrentPage(1);
+      return;
+    }
+
+    // Otherwise open last page (latest date)
+    setCurrentPage(pages.length || 1);
+  }, [pages.length, fromDate, toDate]);
+
+  useEffect(() => {
+    if (fromDate || toDate) {
+      setCurrentPage(1);
+      return;
+    }
+
+    setCurrentPage(pages.length || 1);
+  }, [pages.length, fromDate, toDate]);
+
+  const totalPages = pages.length;
+  const pageData = pages[currentPage - 1]?.entries || [];
 
   if (loading) return <div className="p-4">Loading...</div>;
   if (!accountExists)
@@ -237,12 +287,14 @@ const BankLedger = () => {
           </thead>
           <tbody>
             {/* OPENING BALANCE ROW */}
-            <tr className="bg-gray-100 font-bold">
-              <td colSpan={5} className="border p-3 text-right">Opening Balance</td>
-              <td className={`border p-3 ${openingBalance >= 0 ? "text-green-600" : "text-red-600"}`}>
-                {openingBalance.toFixed(2)}
-              </td>
-            </tr>
+            {currentPage === 1 && !(fromDate || toDate) && (
+              <tr className="bg-gray-100 font-bold">
+                <td colSpan={5} className="border p-3 text-right">Opening Balance</td>
+                <td className={`border p-3 ${openingBalance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {openingBalance.toFixed(2)}
+                </td>
+              </tr>
+            )}
 
             {/* LEDGER ENTRIES */}
             {pageData.length === 0 ? (

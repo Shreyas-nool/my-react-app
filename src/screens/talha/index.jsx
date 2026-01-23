@@ -147,7 +147,6 @@ const BankLedger = () => {
         updatedAt: new Date().toISOString(),
       });
 
-      setCurrentPage(Math.ceil(final.length / ITEMS_PER_PAGE) || 1);
       setLoading(false);
     };
 
@@ -168,35 +167,61 @@ const BankLedger = () => {
   const filtered = useMemo(() => {
     return entries.filter((e) => {
       const d = new Date(e.date);
-      if (fromDate && d < fromDate) return false;
-      if (toDate && d > toDate) return false;
+
+      if (fromDate) {
+        const from = new Date(fromDate);
+        from.setHours(0, 0, 0, 0);
+        if (d < from) return false;
+      }
+
+      if (toDate) {
+        const to = new Date(toDate);
+        to.setHours(23, 59, 59, 999);
+        if (d > to) return false;
+      }
+
       return true;
     });
   }, [entries, fromDate, toDate]);
 
-// ---------------- DATE-AWARE PAGINATION ----------------
-const pages = useMemo(() => {
-  const grouped = {};
-  filtered.forEach((e) => {
-    const d = new Date(e.date);
-    const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  // ---------------- DATE-AWARE PAGINATION ----------------
+  const pages = useMemo(() => {
+    // 🔹 FILTER MODE → single page
+    if (fromDate || toDate) {
+      return filtered.length
+        ? [{ dateKey: "filtered", entries: filtered }]
+        : [];
+    }
 
-    if (!grouped[dateKey]) grouped[dateKey] = [];
-    grouped[dateKey].push(e);
-  });
-
-  const result = [];
-  Object.keys(grouped)
-    .sort()
-    .forEach((dateKey) => {
-      const list = grouped[dateKey];
-      for (let i = 0; i < list.length; i += ITEMS_PER_PAGE) {
-        result.push({ dateKey, entries: list.slice(i, i + ITEMS_PER_PAGE) });
-      }
+    // 🔹 NORMAL MODE → one date per page (20 max)
+    const grouped = {};
+    filtered.forEach((e) => {
+      const d = new Date(e.date);
+      const key = d.toISOString().slice(0, 10);
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(e);
     });
 
-  return result;
-}, [filtered]);
+    const result = [];
+    Object.keys(grouped)
+      .sort()
+      .forEach((dateKey) => {
+        const list = grouped[dateKey];
+        for (let i = 0; i < list.length; i += ITEMS_PER_PAGE) {
+          result.push({ dateKey, entries: list.slice(i, i + ITEMS_PER_PAGE) });
+        }
+      });
+
+    return result;
+  }, [filtered, fromDate, toDate]);
+
+  useEffect(() => {
+    if (pages.length > 0) {
+      setCurrentPage(pages.length);
+    } else {
+      setCurrentPage(1);
+    }
+  }, [pages.length]);
 
 const totalPages = pages.length;
 const pageData = pages[currentPage - 1]?.entries || [];
