@@ -6,19 +6,21 @@ import { Button } from "../../components/ui/button";
 import { ArrowLeft } from "lucide-react";
 
 /* =======================
-   Numeric Helpers (GLOBAL STANDARD)
+   Numeric Helpers
 ======================= */
 const round2 = (n) =>
   Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 const toNum = (v) => Number(v) || 0;
-
 const format2 = (n) => Number(n).toFixed(2);
 
 const CategorySalesReport = () => {
   const navigate = useNavigate();
-  const { state } = useLocation();
-  const { category, date } = state || {};
+  const location = useLocation();
+
+  // ✅ SAFE STATE ACCESS
+  const category = location.state?.category || null;
+  const date = location.state?.date || null;
 
   const [productList, setProductList] = useState([]);
   const [tableData, setTableData] = useState([]);
@@ -33,9 +35,11 @@ const CategorySalesReport = () => {
     const unsub = onValue(partiesRef, (snap) => {
       const data = snap.val() || {};
       const map = {};
+
       Object.entries(data).forEach(([id, party]) => {
-        map[id] = party.name || id;
+        map[id] = party?.name || id;
       });
+
       setPartyMap(map);
     });
 
@@ -51,26 +55,20 @@ const CategorySalesReport = () => {
     const salesRef = ref(db, "sales");
 
     const unsub = onValue(salesRef, (snap) => {
-      const data = snap.val();
-      if (!data) {
-        setProductList([]);
-        setTableData([]);
-        return;
-      }
+      const data = snap.val() || {};
 
-      const selectedDateStr = new Date(date).toISOString().slice(0, 10);
       const productsSet = new Set();
       const tempData = [];
 
-      Object.values(data).forEach((timestampNode) => {
-        Object.values(timestampNode).forEach((invoice) => {
-          const invoiceDateStr = new Date(invoice.createdAt)
-            .toISOString()
-            .slice(0, 10);
+      Object.values(data).forEach((timeNode) => {
+        Object.values(timeNode).forEach((invoice) => {
+          if (!invoice?.items || !invoice.createdAt) return;
 
-          if (invoiceDateStr !== selectedDateStr) return;
+          // Match date from createdAt
+          const invoiceDate = invoice.createdAt.split("T")[0];
+          if (invoiceDate !== date) return;
 
-          const filteredItems = (invoice.items || []).filter(
+          const filteredItems = invoice.items.filter(
             (item) => item.category === category
           );
 
@@ -80,9 +78,6 @@ const CategorySalesReport = () => {
             productsSet.add(item.productName)
           );
 
-          /* =======================
-             GROUP: PRODUCT → PRICE
-          ======================= */
           const productGroups = {};
 
           filteredItems.forEach((item) => {
@@ -118,7 +113,6 @@ const CategorySalesReport = () => {
                 ? {
                     box: toNum(prices[i][1]),
                     price: toNum(prices[i][0]),
-                    // ✅ DECIMAL FORMATTED PRICE
                     display: `${prices[i][1]} / ${format2(prices[i][0])}`,
                   }
                 : null;
@@ -129,7 +123,7 @@ const CategorySalesReport = () => {
         });
       });
 
-      setProductList(Array.from(productsSet));
+      setProductList([...productsSet]);
       setTableData(tempData);
     });
 
@@ -137,7 +131,7 @@ const CategorySalesReport = () => {
   }, [category, date, partyMap]);
 
   /* =======================
-     TOTALS (BOX COUNT)
+     TOTALS
   ======================= */
   const totals = {};
   productList.forEach((prod) => {
@@ -148,6 +142,23 @@ const CategorySalesReport = () => {
       }, 0)
     );
   });
+
+  /* =======================
+     GUARD UI (VERY IMPORTANT)
+  ======================= */
+  if (!category || !date) {
+    return (
+      <div className="max-w-xl mx-auto mt-20 text-center space-y-4">
+        <h2 className="text-xl font-semibold text-red-600">
+          Missing report data
+        </h2>
+        <p className="text-gray-600">
+          Please open this report from the Sales page.
+        </p>
+        <Button onClick={() => navigate(-1)}>Go Back</Button>
+      </div>
+    );
+  }
 
   /* =======================
      UI
@@ -165,7 +176,9 @@ const CategorySalesReport = () => {
           <ArrowLeft className="h-4 w-4" />
         </Button>
 
-        <h1 className="text-xl font-semibold">{category}</h1>
+        <h1 className="text-xl font-semibold">
+          {category}
+        </h1>
       </div>
 
       {/* TABLE */}
@@ -219,10 +232,10 @@ const CategorySalesReport = () => {
                   </tr>
                 ))}
 
-                {/* TOTALS ROW */}
+                {/* TOTALS */}
                 <tr className="bg-gray-200 font-semibold">
                   <td colSpan={2} className="border p-3 text-right">
-                    Total Boxes:
+                    Total Boxes
                   </td>
                   {productList.map((prod) => (
                     <td key={prod} className="border p-3">

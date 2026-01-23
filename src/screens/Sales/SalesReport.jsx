@@ -13,7 +13,7 @@ const SalesReport = () => {
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [categories, setCategories] = useState([]);
-  const [totalsMap, setTotalsMap] = useState({}); // category -> total boxes
+  const [totalsMap, setTotalsMap] = useState({});
   const [loading, setLoading] = useState(true);
 
   const getLocalDateKey = (date) => {
@@ -24,43 +24,37 @@ const SalesReport = () => {
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  /* ---------- FETCH CATEGORIES BY DATE ---------- */
+  /* ---------- FETCH CATEGORIES & TOTALS ---------- */
   useEffect(() => {
+    setLoading(true);
+
+    const selectedDateKey = getLocalDateKey(selectedDate);
     const salesRef = ref(db, "sales");
-    const selectedDateStr = getLocalDateKey(selectedDate);
 
-    const unsub = onValue(salesRef, (snapshot) => {
-      setLoading(true);
-      const data = snapshot.val();
-
-      if (!data) {
-        setCategories([]);
-        setTotalsMap({});
-        setLoading(false);
-        return;
-      }
+    const unsub = onValue(salesRef, (snap) => {
+      const data = snap.val() || {};
 
       const catSet = new Set();
-      const totals = {}; // temp totals per category
+      const totals = {};
 
       Object.values(data).forEach((timeNode) => {
-        Object.values(timeNode || {}).forEach((invoice) => {
-          if (!invoice?.createdAt || !invoice.items) return;
+        Object.values(timeNode).forEach((invoice) => {
+          if (!invoice?.items || !invoice.createdAt) return;
 
-          const invoiceDate = getLocalDateKey(invoice.createdAt);
-
-          if (invoiceDate !== selectedDateStr) return;
+          const invoiceDateKey = getLocalDateKey(invoice.createdAt);
+          if (invoiceDateKey !== selectedDateKey) return;
 
           invoice.items.forEach((item) => {
-            if (!item.category) return;
-            catSet.add(item.category);
-            const boxes = Number(item.box || 0);
-            totals[item.category] = (totals[item.category] || 0) + boxes;
+            const cat = item.category;
+            const box = Number(item.box) || 0;
+
+            catSet.add(cat);
+            totals[cat] = (totals[cat] || 0) + box;
           });
         });
       });
 
-      setCategories([...catSet]);
+      setCategories(Array.from(catSet));
       setTotalsMap(totals);
       setLoading(false);
     });
@@ -111,24 +105,22 @@ const SalesReport = () => {
                 navigate("/sales/report/category", {
                   state: {
                     category: cat,
-                    date: selectedDate.toISOString().slice(0, 10),
+                    date: getLocalDateKey(selectedDate),
                   },
                 })
               }
-              className="cursor-pointer rounded-xl border border-border/40 bg-card p-4 shadow-sm hover:shadow-md hover:bg-muted/30 transition-all"
+              className="cursor-pointer rounded-xl border p-4 shadow-sm hover:shadow-md transition"
             >
               <div className="flex items-center gap-4">
-                <div className="flex items-center justify-center h-12 w-12 rounded-lg bg-primary/10">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
                   <Boxes className="h-6 w-6 text-primary" />
                 </div>
 
-                <div className="flex flex-col">
-                  <h3 className="text-lg font-semibold leading-tight">
-                    {cat}
-                  </h3>
-                  <span className="text-sm text-muted-foreground mt-1">
+                <div>
+                  <h3 className="text-lg font-semibold">{cat}</h3>
+                  <p className="text-sm text-muted-foreground">
                     Total Boxes: {totalsMap[cat] || 0}
-                  </span>
+                  </p>
                 </div>
               </div>
             </div>

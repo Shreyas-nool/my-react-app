@@ -167,9 +167,9 @@ export default function AddExpense() {
 
       alert("✅ Expense saved successfully");
 
-      setCategory("");
-      setEntity(null);
       setDate(new Date());
+      setAmount("");
+      setExpenseFor("");
 
     } catch (err) {
       console.error(err);

@@ -65,16 +65,28 @@ const ExpenseScreen = () => {
     });
   }, []);
 
+  const normalizeDate = (d) => {
+    const date = new Date(d);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
+
   /* ---------------- FILTER (DATE + SEARCH) ---------------- */
   useEffect(() => {
     let data = [...expenses];
 
     if (fromDate) {
-      data = data.filter((e) => new Date(e.date) >= fromDate);
+      const from = normalizeDate(fromDate);
+      data = data.filter(
+        (e) => normalizeDate(e.date) >= from
+      );
     }
 
     if (toDate) {
-      data = data.filter((e) => new Date(e.date) <= toDate);
+      const to = normalizeDate(toDate);
+      data = data.filter(
+        (e) => normalizeDate(e.date) <= to
+      );
     }
 
     if (searchText.trim()) {
