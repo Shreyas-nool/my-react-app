@@ -5,7 +5,15 @@ import App from "./App.jsx";
 
 import axios from "axios";
 import { db } from "./firebase";
-import { ref, push, query, orderByChild, endAt, get, remove } from "firebase/database";
+import {
+  ref,
+  push,
+  query,
+  orderByChild,
+  endAt,
+  get,
+  remove,
+} from "firebase/database";
 
 // =====================
 // Error Logger
@@ -25,7 +33,8 @@ const logError = async (errorObj) => {
       column: errorObj.column || null,
     });
   } catch (e) {
-    console.error("Failed to log error to Firebase:", e);
+    // Prevent infinite loop
+    console.log("Failed to log error to Firebase:", e);
   }
 };
 
@@ -54,7 +63,8 @@ const cleanupOldErrors = async () => {
 
     console.log("🧹 Old errors cleaned up");
   } catch (e) {
-    console.error("Cleanup failed:", e);
+    // This will be logged to console but NOT to DB (avoid loop)
+    console.log("Cleanup failed:", e);
   }
 };
 
@@ -91,7 +101,11 @@ console.error = (...args) => {
   originalConsoleError(...args);
 
   // Prevent infinite loops from logging errors about logging errors
-  if (args[0] && typeof args[0] === "string" && args[0].includes("Failed to log error")) {
+  if (
+    args[0] &&
+    typeof args[0] === "string" &&
+    args[0].includes("Failed to log error")
+  ) {
     return;
   }
 
@@ -106,11 +120,7 @@ console.error = (...args) => {
 // Axios Logging (Optional)
 // =====================
 axios.interceptors.request.use((config) => {
-  console.log(
-    "🚀 Axios request:",
-    config.method.toUpperCase(),
-    config.url
-  );
+  console.log("🚀 Axios request:", config.method.toUpperCase(), config.url);
   return config;
 });
 

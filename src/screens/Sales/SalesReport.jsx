@@ -74,7 +74,7 @@ const SalesReport = () => {
   return (
     <div className="flex flex-col max-w-6xl mx-auto mt-6 min-h-screen p-4 space-y-6">
       {/* Header */}
-      <header className="relative border-b pb-2 flex items-center justify-between">
+      <header className="relative border-b pb-4 flex items-center justify-between">
         {/* Back Button */}
         <Button
           variant="ghost"
@@ -90,21 +90,23 @@ const SalesReport = () => {
           Sales Report
         </h1>
 
-        {/* Yearly Graph Button */}
-        <Button
-          onClick={() => navigate("/sales/report/yearly-graph")}
-          className="h-9 flex items-center gap-2"
-        >
-          <ChartBar className="h-4 w-4" />
-          Yearly Graph
-        </Button>
+        {/* Right Buttons */}
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => navigate("/sales/report/yearly-graph")}
+            className="h-9 flex items-center gap-2"
+          >
+            <ChartBar className="h-4 w-4" />
+            Yearly Graph
+          </Button>
 
-        <Button
-          onClick={() => navigate("/sales/analysis")}
-          className="h-9"
-        >
-          Sales Analysis
-        </Button>
+          <Button
+            onClick={() => navigate("/sales/analysis")}
+            className="h-9"
+          >
+            Sales Analysis
+          </Button>
+        </div>
       </header>
 
       {/* Date Picker Card */}
@@ -152,7 +154,8 @@ const SalesReport = () => {
                 <div>
                   <h3 className="text-lg font-semibold">{cat}</h3>
                   <p className="text-sm text-muted-foreground">
-                    Total Boxes: <span className="font-medium">{totalsMap[cat] || 0}</span>
+                    Total Boxes:{" "}
+                    <span className="font-medium">{totalsMap[cat] || 0}</span>
                   </p>
                 </div>
               </div>

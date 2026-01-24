@@ -372,21 +372,31 @@ const mergeItems = (oldItems = [], newItems = []) => {
     if (items.length === 0) return toast.error("Add items");
 
     try {
+      const newISO = formatToISO(createdAt);
+      const newDateKey = newISO;
+
       // ===========================
-      // ✏️ EDIT MODE (NO CHANGE)
+      // ✏️ EDIT MODE
       // ===========================
       if (invoiceToEdit) {
-        const saleRef = ref(
-          db,
-          `sales/${invoiceToEdit.createdAt}/invoice-${invoiceToEdit.invoiceNumber}`
-        );
+        const oldPath = `sales/${invoiceToEdit.createdAt}/invoice-${invoiceToEdit.invoiceNumber}`;
+        const newPath = `sales/${newDateKey}/invoice-${invoiceToEdit.invoiceNumber}`;
 
-        await set(saleRef, {
+        // If date changed → move node
+        if (oldPath !== newPath) {
+          const oldRef = ref(db, oldPath);
+          await set(oldRef, null); // delete old node
+        }
+
+        await set(ref(db, newPath), {
           ...invoiceToEdit,
+          createdAt: newISO,
+          partyId: selectedPartyId,
+          warehouseId: selectedWarehouseId,
           items,
           subtotal,
           total: subtotal,
-          createdAt: formatToISO(new Date()),
+          invoiceNumber: invoiceToEdit.invoiceNumber,
         });
 
         toast.success(`Invoice updated! Invoice No: ${invoiceToEdit.invoiceNumber}`);
@@ -394,7 +404,7 @@ const mergeItems = (oldItems = [], newItems = []) => {
       }
 
       // ===========================
-      // 🔍 CHECK SAME-DAY INVOICE
+      // 🔍 SAME-DAY MERGE (CREATE)
       // ===========================
       const salesRef = ref(db, "sales");
       let existingInvoice = null;
@@ -425,9 +435,6 @@ const mergeItems = (oldItems = [], newItems = []) => {
         );
       });
 
-      // ===========================
-      // 🔁 MERGE INTO EXISTING
-      // ===========================
       if (existingInvoice) {
         const mergedItems = mergeItems(existingInvoice.items, items);
         const mergedSubtotal = mergedItems.reduce(
@@ -448,9 +455,6 @@ const mergeItems = (oldItems = [], newItems = []) => {
         toast.success("Invoice updated (same party, same day)");
         setItems([]);
         setSubtotal(0);
-        setTotal(0);
-        setInvoiceNumber(null);
-        setDueDate(null);
         return;
       }
 
@@ -458,11 +462,13 @@ const mergeItems = (oldItems = [], newItems = []) => {
       // 🆕 CREATE NEW INVOICE
       // ===========================
       const counterRef = ref(db, "invoiceCounter");
-      const counterRes = await runTransaction(counterRef, cur => (Number(cur) || 1000) + 1);
-      const invoiceNumber = counterRes.snapshot.val();
+      const counterRes = await runTransaction(
+        counterRef,
+        cur => (Number(cur) || 1000) + 1
+      );
 
-      const iso = formatToISO(createdAt);
-      const saleRef = ref(db, `sales/${iso}/invoice-${invoiceNumber}`);
+      const invoiceNumber = counterRes.snapshot.val();
+      const saleRef = ref(db, `sales/${newDateKey}/invoice-${invoiceNumber}`);
 
       const selectedParty = parties.find(p => p.id === selectedPartyId);
 
@@ -473,7 +479,7 @@ const mergeItems = (oldItems = [], newItems = []) => {
       }
 
       await set(saleRef, {
-        createdAt: iso,
+        createdAt: newISO,
         dueDate: dueDate ? formatToISO(dueDate) : null,
         partyId: selectedPartyId,
         warehouseId: selectedWarehouseId,
@@ -488,9 +494,6 @@ const mergeItems = (oldItems = [], newItems = []) => {
       toast.success(`Sale saved! Invoice No: ${invoiceNumber}`);
       setItems([]);
       setSubtotal(0);
-      setTotal(0);
-      setInvoiceNumber(null);
-      setDueDate(null);
 
     } catch (err) {
       console.error(err);
