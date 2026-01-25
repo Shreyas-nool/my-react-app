@@ -42,6 +42,17 @@ const formatPrice = (value) => {
   return v !== 0 && v < 0.01 ? v.toFixed(4) : v.toFixed(2);
 };
 
+const calculateSubtotalFromItems = (items = []) =>
+  round2(items.reduce((sum, i) => sum + Number(i.total || 0), 0));
+
+const getDateKeyFromISO = (iso) => {
+  const d = new Date(iso);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 const SalesInvoice = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -148,8 +159,9 @@ const SalesInvoice = () => {
       // 1️⃣ Set basic fields
       setSelectedPartyId(invoiceToEdit.partyId || "");
       setItems(invoiceToEdit.items || []);
-      setSubtotal(invoiceToEdit.subtotal || invoiceToEdit.total || 0);
-      setCreatedAt(
+      setSubtotal(
+        calculateSubtotalFromItems(invoiceToEdit.items || [])
+      );      setCreatedAt(
         invoiceToEdit.createdAt ? new Date(invoiceToEdit.createdAt) : new Date()
       );
       setSelectedWarehouseId(invoiceToEdit.warehouseId || "");
@@ -373,20 +385,42 @@ const mergeItems = (oldItems = [], newItems = []) => {
 
     try {
       const newISO = formatToISO(createdAt);
-      const newDateKey = newISO;
+      const newDateKey = getDateKeyFromISO(newISO);
 
       // ===========================
       // ✏️ EDIT MODE
       // ===========================
       if (invoiceToEdit) {
-        const oldPath = `sales/${invoiceToEdit.createdAt}/invoice-${invoiceToEdit.invoiceNumber}`;
-        const newPath = `sales/${newDateKey}/invoice-${invoiceToEdit.invoiceNumber}`;
 
-        // If date changed → move node
-        if (oldPath !== newPath) {
-          const oldRef = ref(db, oldPath);
-          await set(oldRef, null); // delete old node
+        // NEW DATE (from picker)
+        const selectedDate = createdAt; // 2026-01-21
+
+
+        // OLD ISO TIME
+        const oldISO = invoiceToEdit.createdAt; // 2026-01-20T20:25:38
+
+        // ===========================
+        // 🔁 CREATE NEW ISO (KEEP OLD TIME)
+        // ===========================
+        const newISO =
+        oldISO.split("T")[0] !== formatToISO(selectedDate).split("T")[0]
+        ? `${formatToISO(selectedDate).split("T")[0]}T${oldISO.split("T")[1]}`
+        : oldISO;
+
+        // ===========================
+        // ✅ SUBTOTAL SAFETY CHECK
+        // ===========================
+        const freshSubtotal = calculateSubtotalFromItems(items);
+
+        if (round2(subtotal) !== freshSubtotal) {
+          toast.error("Subtotal mismatch detected. Please recheck items.");
+          return;
         }
+
+        // ===========================
+        // 🔁 SAVE NEW INVOICE (WITH FULL ISO KEY)
+        // ===========================
+        const newPath = `sales/${newISO}/invoice-${invoiceToEdit.invoiceNumber}`;
 
         await set(ref(db, newPath), {
           ...invoiceToEdit,
@@ -394,68 +428,41 @@ const mergeItems = (oldItems = [], newItems = []) => {
           partyId: selectedPartyId,
           warehouseId: selectedWarehouseId,
           items,
-          subtotal,
-          total: subtotal,
+          subtotal: freshSubtotal,
+          total: freshSubtotal,
           invoiceNumber: invoiceToEdit.invoiceNumber,
         });
 
-        toast.success(`Invoice updated! Invoice No: ${invoiceToEdit.invoiceNumber}`);
-        return navigate("/sales", { state: { goToLastPage: true } });
-      }
+        // ===========================
+        // 🔁 DELETE OLD INVOICE BY INVOICE NUMBER
+        // (search all dates)
+        // ===========================
+        const salesRef = ref(db, "sales");
 
-      // ===========================
-      // 🔍 SAME-DAY MERGE (CREATE)
-      // ===========================
-      const salesRef = ref(db, "sales");
-      let existingInvoice = null;
-      let existingPath = null;
-
-      await new Promise(resolve => {
-        onValue(
-          salesRef,
-          snap => {
+        await new Promise((resolve) => {
+          onValue(salesRef, (snap) => {
             const data = snap.val() || {};
-            const todayKey = getDateOnly(createdAt);
 
             Object.entries(data).forEach(([dateKey, invoices]) => {
-              Object.values(invoices).forEach(inv => {
+              Object.entries(invoices || {}).forEach(([key, inv]) => {
+
+                // delete only old invoice (not the new one)
                 if (
-                  inv.partyId === selectedPartyId &&
-                  getDateOnly(inv.createdAt) === todayKey
+                  inv.invoiceNumber === invoiceToEdit.invoiceNumber &&
+                  dateKey !== newISO // keep the new one
                 ) {
-                  existingInvoice = inv;
-                  existingPath = `sales/${dateKey}/invoice-${inv.invoiceNumber}`;
+                  set(ref(db, `sales/${dateKey}/${key}`), null);
                 }
+
               });
             });
 
             resolve();
-          },
-          { onlyOnce: true }
-        );
-      });
-
-      if (existingInvoice) {
-        const mergedItems = mergeItems(existingInvoice.items, items);
-        const mergedSubtotal = mergedItems.reduce(
-          (sum, i) => sum + Number(i.total || 0),
-          0
-        );
-
-        await set(ref(db, existingPath), {
-          ...existingInvoice,
-          items: mergedItems,
-          subtotal: round2(mergedSubtotal),
-          total: round2(mergedSubtotal),
-          createdAt: formatToISO(new Date()),
+          }, { onlyOnce: true });
         });
 
-        await updateStockAfterSale(items);
-
-        toast.success("Invoice updated (same party, same day)");
-        setItems([]);
-        setSubtotal(0);
-        return;
+        toast.success(`Invoice updated! Invoice No: ${invoiceToEdit.invoiceNumber}`);
+        return navigate("/sales", { state: { goToLastPage: true } });
       }
 
       // ===========================

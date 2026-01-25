@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ref, onValue } from "firebase/database";
+import { ref, onValue, remove } from "firebase/database"; // <-- add remove
 import { db } from "../../../firebase";
 
 import { Button } from "../../../components/ui/button";
@@ -68,6 +68,16 @@ const ErrorsReport = () => {
     alert("Copied error to clipboard!");
   };
 
+  // ✅ Clear All Errors
+  const clearAllErrors = async () => {
+    const ok = window.confirm("Are you sure you want to delete ALL errors?");
+    if (!ok) return;
+
+    await remove(ref(db, "appErrors")); // <-- deletes all errors
+    setErrors([]);
+    setSelectedError(null);
+  };
+
   return (
     <div className="min-h-screen p-6 bg-slate-50">
       <div className="max-w-6xl mx-auto">
@@ -80,6 +90,11 @@ const ErrorsReport = () => {
           <div className="flex items-center gap-2">
             <Bug className="text-red-600" />
             <span className="text-sm text-slate-500">Live Errors</span>
+
+            {/* ✅ Clear All Errors Button */}
+            <Button variant="destructive" onClick={clearAllErrors}>
+              Clear All
+            </Button>
           </div>
         </div>
 
@@ -145,12 +160,12 @@ const ErrorsReport = () => {
                     >
                       <td className="p-3">
                         {new Date(err.timestamp).toLocaleString("en-GB", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            second: "2-digit",
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
                         })}
                       </td>
                       <td className="p-3">{err.message}</td>

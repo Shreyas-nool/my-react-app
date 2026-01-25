@@ -40,6 +40,7 @@ import DefaultAccounts from "./screens/Profile/admin/DefaultAccounts";
 // Developer - Profile
 import DeveloperPanel from "./screens/Profile/developer/developerPanel";
 import ErrorsReport from "./screens/Profile/developer/ErrorsReport";
+import DbInspector from "./screens/Profile/developer/DbInspector";
 
 /* =========================================================
    BANK MODULE
@@ -161,6 +162,7 @@ const router = createBrowserRouter([
             path: "/developer/errors",
             element: <ErrorsReport />
           },
+          { path: "/developer/db-inspector", element: <DbInspector /> },
 
           /* ---------- PRODUCT ---------- */
           { path: "/product", element: <Product /> },
