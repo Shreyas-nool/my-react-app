@@ -4,7 +4,7 @@ import "./index.css";
 import App from "./App.jsx";
 
 import axios from "axios";
-import { db } from "./firebase";
+
 import {
   ref,
   push,
@@ -14,13 +14,51 @@ import {
   get,
   remove,
 } from "firebase/database";
+import { db } from "./firebase";
 
-// =====================
-// Error Logger
-// =====================
+/* =====================================================
+   🔥 FIREBASE DB ACCESS TRACKING → admin/dbAccessLogs
+   ===================================================== */
+if (import.meta.env.DEV) {
+  const originalRef = ref;
+
+  // We CANNOT patch ref like this in modular API.
+  // Instead, create a wrapper function:
+
+  const trackedRef = (path) => {
+    const trace = new Error().stack;
+
+    console.groupCollapsed("🔥 Firebase DB Access");
+    console.log("📍 Path:", path);
+    console.trace("📌 Called from");
+    console.groupEnd();
+
+    try {
+      push(ref(db, "admin/dbAccessLogs"), {
+        path,
+        url: window.location.href,
+        time: new Date().toISOString(),
+        timestamp: Date.now(),
+        stack: trace,
+        userAgent: navigator.userAgent,
+      });
+    } catch (e) {
+      console.log("Failed to log DB access:", e);
+    }
+
+    return originalRef(db, path);
+  };
+
+  // Replace your app's ref usage with trackedRef
+  // (e.g., use trackedRef instead of ref in your code)
+}
+
+/* =====================================================
+   🚨 ERROR LOGGER → admin/appErrors
+   ===================================================== */
 const logError = async (errorObj) => {
   try {
-    await push(ref(db, "appErrors"), {
+    await push(ref(db, "admin/appErrors"), {
       message: errorObj.message || "Unknown Error",
       stack: errorObj.stack || null,
       url: window.location.href,
@@ -33,49 +71,46 @@ const logError = async (errorObj) => {
       column: errorObj.column || null,
     });
   } catch (e) {
-    // Prevent infinite loop
-    console.log("Failed to log error to Firebase:", e);
+    console.log("Failed to log error:", e);
   }
 };
 
-// =====================
-// Cleanup Old Errors (Auto Delete)
-// =====================
+/* =====================================================
+   🧹 CLEANUP OLD ERRORS (AUTO)
+   ===================================================== */
 const cleanupOldErrors = async () => {
   try {
-    const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+    const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
     const cutoff = Date.now() - ONE_WEEK_MS;
 
-    const oldErrorsQuery = query(
-      ref(db, "appErrors"),
+    const q = query(
+      ref(db, "admin/appErrors"),
       orderByChild("timestamp"),
       endAt(cutoff)
     );
 
-    const snap = await get(oldErrorsQuery);
-    const oldErrors = snap.val();
+    const snap = await get(q);
+    const data = snap.val();
 
-    if (!oldErrors) return;
+    if (!data) return;
 
-    for (const key of Object.keys(oldErrors)) {
-      await remove(ref(db, `appErrors/${key}`));
+    for (const key of Object.keys(data)) {
+      await remove(ref(db, `admin/appErrors/${key}`));
     }
 
     console.log("🧹 Old errors cleaned up");
   } catch (e) {
-    // This will be logged to console but NOT to DB (avoid loop)
     console.log("Cleanup failed:", e);
   }
 };
 
-// Run cleanup on app load
 cleanupOldErrors();
 
-// =====================
-// Global Error Handling
-// =====================
+/* =====================================================
+   🌐 GLOBAL ERROR HANDLERS
+   ===================================================== */
 
-// 1️⃣ uncaught JS errors
+// Uncaught JS errors
 window.onerror = function (message, source, lineno, colno, error) {
   logError({
     message,
@@ -87,25 +122,20 @@ window.onerror = function (message, source, lineno, colno, error) {
   });
 };
 
-// 2️⃣ unhandled promise rejections
+// Unhandled promise rejections
 window.onunhandledrejection = function (event) {
   logError({
     message: event.reason?.message || "Unhandled Promise Rejection",
-    stack: event.reason?.stack,
+    stack: event.reason?.stack || null,
   });
 };
 
-// 3️⃣ console.error override
+// console.error override
 const originalConsoleError = console.error;
 console.error = (...args) => {
   originalConsoleError(...args);
 
-  // Prevent infinite loops from logging errors about logging errors
-  if (
-    args[0] &&
-    typeof args[0] === "string" &&
-    args[0].includes("Failed to log error")
-  ) {
+  if (typeof args[0] === "string" && args[0].includes("Failed to log")) {
     return;
   }
 
@@ -116,17 +146,17 @@ console.error = (...args) => {
   });
 };
 
-// =====================
-// Axios Logging (Optional)
-// =====================
+/* =====================================================
+   🌐 AXIOS LOGGING
+   ===================================================== */
 axios.interceptors.request.use((config) => {
-  console.log("🚀 Axios request:", config.method.toUpperCase(), config.url);
+  console.log("🚀 Axios:", config.method?.toUpperCase(), config.url);
   return config;
 });
 
-// =====================
-// Render App
-// =====================
+/* =====================================================
+   ⚛️ RENDER APP
+   ===================================================== */
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <App />

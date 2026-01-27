@@ -41,6 +41,7 @@ import DefaultAccounts from "./screens/Profile/admin/DefaultAccounts";
 import DeveloperPanel from "./screens/Profile/developer/developerPanel";
 import ErrorsReport from "./screens/Profile/developer/ErrorsReport";
 import DbInspector from "./screens/Profile/developer/DbInspector";
+import DbAccessLogs from "./screens/Profile/developer/DbAccessLogs";
 
 /* =========================================================
    BANK MODULE
@@ -158,10 +159,8 @@ const router = createBrowserRouter([
 
           /* ---------- DEVELOPER ---------- */
           { path: "/developer", element: <DeveloperPanel /> },
-          {
-            path: "/developer/errors",
-            element: <ErrorsReport />
-          },
+          { path: "/developer/db-access-logs", element: <DbAccessLogs /> },
+          { path: "/developer/errors", element: <ErrorsReport /> },
           { path: "/developer/db-inspector", element: <DbInspector /> },
 
           /* ---------- PRODUCT ---------- */

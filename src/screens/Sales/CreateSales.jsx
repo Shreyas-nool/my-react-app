@@ -388,28 +388,17 @@ const mergeItems = (oldItems = [], newItems = []) => {
       const newDateKey = getDateKeyFromISO(newISO);
 
       // ===========================
-      // ✏️ EDIT MODE
+      // ✏️ EDIT MODE (UNCHANGED)
       // ===========================
       if (invoiceToEdit) {
+        const selectedDate = createdAt;
+        const oldISO = invoiceToEdit.createdAt;
 
-        // NEW DATE (from picker)
-        const selectedDate = createdAt; // 2026-01-21
-
-
-        // OLD ISO TIME
-        const oldISO = invoiceToEdit.createdAt; // 2026-01-20T20:25:38
-
-        // ===========================
-        // 🔁 CREATE NEW ISO (KEEP OLD TIME)
-        // ===========================
         const newISO =
-        oldISO.split("T")[0] !== formatToISO(selectedDate).split("T")[0]
-        ? `${formatToISO(selectedDate).split("T")[0]}T${oldISO.split("T")[1]}`
-        : oldISO;
+          oldISO.split("T")[0] !== formatToISO(selectedDate).split("T")[0]
+            ? `${formatToISO(selectedDate).split("T")[0]}T${oldISO.split("T")[1]}`
+            : oldISO;
 
-        // ===========================
-        // ✅ SUBTOTAL SAFETY CHECK
-        // ===========================
         const freshSubtotal = calculateSubtotalFromItems(items);
 
         if (round2(subtotal) !== freshSubtotal) {
@@ -417,9 +406,6 @@ const mergeItems = (oldItems = [], newItems = []) => {
           return;
         }
 
-        // ===========================
-        // 🔁 SAVE NEW INVOICE (WITH FULL ISO KEY)
-        // ===========================
         const newPath = `sales/${newISO}/invoice-${invoiceToEdit.invoiceNumber}`;
 
         await set(ref(db, newPath), {
@@ -433,37 +419,86 @@ const mergeItems = (oldItems = [], newItems = []) => {
           invoiceNumber: invoiceToEdit.invoiceNumber,
         });
 
-        // ===========================
-        // 🔁 DELETE OLD INVOICE BY INVOICE NUMBER
-        // (search all dates)
-        // ===========================
         const salesRef = ref(db, "sales");
 
         await new Promise((resolve) => {
-          onValue(salesRef, (snap) => {
-            const data = snap.val() || {};
+          onValue(
+            salesRef,
+            (snap) => {
+              const data = snap.val() || {};
 
-            Object.entries(data).forEach(([dateKey, invoices]) => {
-              Object.entries(invoices || {}).forEach(([key, inv]) => {
-
-                // delete only old invoice (not the new one)
-                if (
-                  inv.invoiceNumber === invoiceToEdit.invoiceNumber &&
-                  dateKey !== newISO // keep the new one
-                ) {
-                  set(ref(db, `sales/${dateKey}/${key}`), null);
-                }
-
+              Object.entries(data).forEach(([dateKey, invoices]) => {
+                Object.entries(invoices || {}).forEach(([key, inv]) => {
+                  if (
+                    inv.invoiceNumber === invoiceToEdit.invoiceNumber &&
+                    dateKey !== newISO
+                  ) {
+                    set(ref(db, `sales/${dateKey}/${key}`), null);
+                  }
+                });
               });
-            });
 
-            resolve();
-          }, { onlyOnce: true });
+              resolve();
+            },
+            { onlyOnce: true }
+          );
         });
 
-        toast.success(`Invoice updated! Invoice No: ${invoiceToEdit.invoiceNumber}`);
+        toast.success(
+          `Invoice updated! Invoice No: ${invoiceToEdit.invoiceNumber}`
+        );
         return navigate("/sales", { state: { goToLastPage: true } });
       }
+
+      // =====================================================
+      // 🔁 MERGE LOGIC (SAME PARTY + WAREHOUSE + SAME DAY)
+      // =====================================================
+      const daySalesRef = ref(db, `sales/${newDateKey}`);
+
+      let merged = false;
+
+      await new Promise((resolve) => {
+        onValue(
+          daySalesRef,
+          async (snap) => {
+            const daySales = snap.val() || {};
+
+            for (const [key, sale] of Object.entries(daySales)) {
+              if (
+                sale.partyId === selectedPartyId &&
+                sale.warehouseId === selectedWarehouseId
+              ) {
+                const mergedItems = mergeItems(sale.items || [], items);
+                const mergedSubtotal =
+                  calculateSubtotalFromItems(mergedItems);
+
+                await set(ref(db, `sales/${newDateKey}/${key}`), {
+                  ...sale,
+                  items: mergedItems,
+                  subtotal: mergedSubtotal,
+                  total: mergedSubtotal,
+                  updatedAt: newISO,
+                });
+
+                await updateStockAfterSale(items);
+
+                toast.success(
+                  `Merged into Invoice No: ${sale.invoiceNumber}`
+                );
+
+                merged = true;
+                navigate("/sales", { state: { goToLastPage: true } });
+                break;
+              }
+            }
+
+            resolve();
+          },
+          { onlyOnce: true }
+        );
+      });
+
+      if (merged) return;
 
       // ===========================
       // 🆕 CREATE NEW INVOICE
@@ -471,13 +506,13 @@ const mergeItems = (oldItems = [], newItems = []) => {
       const counterRef = ref(db, "invoiceCounter");
       const counterRes = await runTransaction(
         counterRef,
-        cur => (Number(cur) || 1000) + 1
+        (cur) => (Number(cur) || 1000) + 1
       );
 
       const invoiceNumber = counterRes.snapshot.val();
       const saleRef = ref(db, `sales/${newDateKey}/invoice-${invoiceNumber}`);
 
-      const selectedParty = parties.find(p => p.id === selectedPartyId);
+      const selectedParty = parties.find((p) => p.id === selectedPartyId);
 
       let dueDate = null;
       if (selectedParty?.creditPeriod) {
@@ -501,7 +536,6 @@ const mergeItems = (oldItems = [], newItems = []) => {
       toast.success(`Sale saved! Invoice No: ${invoiceNumber}`);
       setItems([]);
       setSubtotal(0);
-
     } catch (err) {
       console.error(err);
       toast.error("Error saving sale");

@@ -25,11 +25,11 @@ const tiles = [
     { to: "/banks", label: "Banks", icon: Landmark },
     { to: "/talha", label: "Talha", icon: User },
     { to: "/jr", label: "JR", icon: User },
+    { to: "/sr", label: "SR", icon: User },
     { to: "/duedate", label: "Due Date", icon: CalendarCheck },
     { to: "/warehouse", label: "Warehouse", icon: Warehouse },
     { to: "/maladpayment", label: "Malad Payment", icon: Warehouse },
     { to: "/mumbaipayment", label: "Mumbai Payment", icon: Warehouse },
-    { to: "/sr", label: "SR", icon: User },
 ];
 
 const HomeScreen = () => {

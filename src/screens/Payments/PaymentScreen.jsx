@@ -5,6 +5,7 @@ import { ArrowLeft, Trash2 } from "lucide-react";
 import { getDatabase, ref, onValue, remove } from "firebase/database";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import { toSafeKey } from "../../lib/safekey";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -40,12 +41,12 @@ const PaymentScreen = () => {
                     createdAt: txn.createdAt || Number(txn.txnId),
                     from: txn.fromName || "-",
                     to: txn.toName || "-",
+                    fromName: txn.fromName,
+                    toName: txn.toName,
+                    fromType: txn.fromType,
+                    toType: txn.toType,
                     amount: Number(txn.amount || 0),
                     note: txn.note || "-",
-                    deletePaths: [
-                      `payments/${txn.fromType}/${txn.fromName}/${date}/${txn.txnId}`,
-                      `payments/${txn.toType}/${txn.toName}/${date}/${txn.txnId}`,
-                    ],
                   });
                 }
               });
@@ -55,13 +56,9 @@ const PaymentScreen = () => {
       }
 
       const sorted = Array.from(map.values()).sort((a, b) => {
-        // Sort by date (newest first)
         const dateA = new Date(a.date).getTime();
         const dateB = new Date(b.date).getTime();
-
         if (dateB !== dateA) return dateB - dateA;
-
-        // If same date, sort by createdAt
         return b.createdAt - a.createdAt;
       });
 
@@ -108,17 +105,40 @@ const PaymentScreen = () => {
     setCurrentPage(1);
   }, [searchQuery, selectedDate]);
 
-  /* ---------------- TOTAL (ALL FILTERED) ---------------- */
+  /* ---------------- TOTAL ---------------- */
   const totalAmount = filteredPayments.reduce(
     (sum, p) => sum + p.amount,
     0
   );
 
-  /* ---------------- DELETE ---------------- */
-  const handleDelete = async (paths) => {
+  /* ---------------- DELETE (FIXED) ---------------- */
+  const handleDelete = async (payment) => {
     if (!window.confirm("Delete this payment everywhere?")) return;
+
     const db = getDatabase();
-    await Promise.all(paths.map((p) => remove(ref(db, p))));
+
+    const fromKey = toSafeKey(payment.fromName);
+    const toKey = toSafeKey(payment.toName);
+
+    try {
+      await Promise.all([
+        remove(
+          ref(
+            db,
+            `payments/${payment.fromType}/${fromKey}/${payment.date}/${payment.id}`
+          )
+        ),
+        remove(
+          ref(
+            db,
+            `payments/${payment.toType}/${toKey}/${payment.date}/${payment.id}`
+          )
+        ),
+      ]);
+    } catch (err) {
+      console.error("Delete failed:", err);
+      alert("Failed to delete payment");
+    }
   };
 
   /* ---------------- UI ---------------- */
@@ -198,7 +218,7 @@ const PaymentScreen = () => {
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={() => handleDelete(p.deletePaths)}
+                      onClick={() => handleDelete(p)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -208,7 +228,6 @@ const PaymentScreen = () => {
             )}
           </tbody>
 
-          {/* TOTAL FOOTER */}
           {filteredPayments.length > 0 && (
             <tfoot>
               <tr className="bg-gray-100 font-semibold">

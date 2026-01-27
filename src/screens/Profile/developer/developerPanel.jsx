@@ -1,6 +1,12 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../../components/ui/button";
-import { ArrowLeft, Bug, Database, ShieldCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  Bug,
+  Database,
+  ShieldCheck,
+  Activity,
+} from "lucide-react";
 
 const DeveloperPanel = () => {
   const navigate = useNavigate();
@@ -14,7 +20,9 @@ const DeveloperPanel = () => {
           <Button variant="ghost" onClick={() => navigate(-1)}>
             <ArrowLeft />
           </Button>
-          <h1 className="text-3xl font-bold text-slate-900">Developer Panel</h1>
+          <h1 className="text-3xl font-bold text-slate-900">
+            Developer Panel
+          </h1>
         </div>
 
         {/* Developer Options */}
@@ -27,10 +35,10 @@ const DeveloperPanel = () => {
           >
             <div className="flex items-center gap-3">
               <Bug className="h-6 w-6 text-red-600" />
-              <h3 className="text-lg font-semibold text-slate-900">Errors Report</h3>
+              <h3 className="text-lg font-semibold">Errors Report</h3>
             </div>
             <p className="mt-2 text-sm text-slate-600">
-              View all errors logged from your app in Firebase.
+              View all runtime errors logged from your app.
             </p>
           </button>
 
@@ -41,24 +49,38 @@ const DeveloperPanel = () => {
           >
             <div className="flex items-center gap-3">
               <Database className="h-6 w-6 text-indigo-600" />
-              <h3 className="text-lg font-semibold text-slate-900">DB Inspector</h3>
+              <h3 className="text-lg font-semibold">DB Inspector</h3>
             </div>
             <p className="mt-2 text-sm text-slate-600">
-              View and debug Firebase data live.
+              Validate and inspect Firebase data.
             </p>
           </button>
 
-          {/* Security Checks */}
+          {/* DB Access Logs ✅ NEW */}
+          <button
+            onClick={() => navigate("/developer/db-access-logs")}
+            className="rounded-lg border border-slate-300 p-6 text-left hover:border-violet-600 hover:bg-violet-50 transition"
+          >
+            <div className="flex items-center gap-3">
+              <Activity className="h-6 w-6 text-violet-600" />
+              <h3 className="text-lg font-semibold">DB Access Logs</h3>
+            </div>
+            <p className="mt-2 text-sm text-slate-600">
+              See which Firebase nodes are being accessed and from where.
+            </p>
+          </button>
+
+          {/* Security */}
           <button
             onClick={() => navigate("/developer/security")}
             className="rounded-lg border border-slate-300 p-6 text-left hover:border-emerald-600 hover:bg-emerald-50 transition"
           >
             <div className="flex items-center gap-3">
               <ShieldCheck className="h-6 w-6 text-emerald-600" />
-              <h3 className="text-lg font-semibold text-slate-900">Security Checks</h3>
+              <h3 className="text-lg font-semibold">Security Checks</h3>
             </div>
             <p className="mt-2 text-sm text-slate-600">
-              Check DB rules, authentication & access logs.
+              DB rules, auth & access verification.
             </p>
           </button>
 

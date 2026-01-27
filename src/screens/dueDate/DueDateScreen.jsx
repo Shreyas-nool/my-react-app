@@ -28,6 +28,10 @@ export default function DueDateScreen() {
     key: null,
     direction: "asc",
   });
+  const [loading, setLoading] = useState(true);
+
+  // ✅ filter state
+  const [filter, setFilter] = useState("all"); // "all" or "overdue"
 
   const navigate = useNavigate();
 
@@ -36,86 +40,89 @@ export default function DueDateScreen() {
     const partyRef = ref(db, "parties");
 
     let partyCredit = {};
+    let partyNameById = {};
 
-    // Fetch party credit period
+    // Fetch party data
     onValue(partyRef, (snap) => {
       const parties = snap.val() || {};
       Object.keys(parties).forEach((id) => {
         const p = parties[id];
-        partyCredit[p.name] = p.creditPeriod;
+        partyCredit[id] = p.creditPeriod;
+        partyNameById[id] = p.name;
       });
-    });
 
-    onValue(salesRef, (snapshot) => {
-      const sales = snapshot.val() || {};
-      let latestSale = {};
+      // Fetch sales data
+      onValue(salesRef, (snapshot) => {
+        const sales = snapshot.val() || {};
+        let latestDueDate = {};
 
-      Object.keys(sales).forEach((dateKey) => {
-        const invoices = sales[dateKey];
-        Object.keys(invoices).forEach((invoiceKey) => {
-          const sale = invoices[invoiceKey];
-          const party = sale.party;
+        Object.keys(sales).forEach((dateKey) => {
+          const invoices = sales[dateKey];
 
-          if (!latestSale[party]) {
-            latestSale[party] = sale.createdAt;
-          } else if (new Date(sale.createdAt) > new Date(latestSale[party])) {
-            latestSale[party] = sale.createdAt;
-          }
+          Object.keys(invoices).forEach((invoiceKey) => {
+            const sale = invoices[invoiceKey];
+            const partyId = sale.partyId;
+            const partyName = partyNameById[partyId];
+
+            if (!partyName) return;
+
+            const creditPeriod = partyCredit[partyId];
+
+            if (!creditPeriod || isNaN(creditPeriod)) {
+              latestDueDate[partyName] = {
+                party: partyName,
+                lastInvoice: sale.createdAt,
+                creditPeriod: "~",
+                dueDate: "~",
+                daysLeft: "No credit period set",
+              };
+              return;
+            }
+
+            const due = new Date(sale.createdAt);
+            due.setDate(due.getDate() + Number(creditPeriod));
+
+            const existing = latestDueDate[partyName];
+
+            if (!existing || new Date(due) > new Date(existing.dueDate)) {
+              latestDueDate[partyName] = {
+                party: partyName,
+                lastInvoice: sale.createdAt,
+                creditPeriod: `${creditPeriod} days`,
+                dueDate: due.toISOString().split("T")[0],
+                daysLeft: Math.ceil(
+                  (due - new Date()) / (1000 * 60 * 60 * 24)
+                ),
+              };
+            }
+          });
         });
+
+        setPartyData(Object.values(latestDueDate));
+        setLoading(false);
       });
-
-      // Build final data
-      const result = Object.keys(latestSale).map((party) => {
-        const lastInvoice = latestSale[party];
-        const cp = partyCredit[party];
-
-        // If credit period is missing
-        if (cp === undefined || cp === null || cp === "" || isNaN(cp)) {
-          return {
-            party,
-            lastInvoice,
-            creditPeriod: "~",
-            dueDate: "~",
-            daysLeft: "No credit period set",
-          };
-        }
-
-        const creditPeriod = Number(cp);
-
-        const due = new Date(lastInvoice);
-        due.setDate(due.getDate() + creditPeriod);
-
-        const today = new Date();
-        const daysLeft = Math.ceil(
-          (due - today) / (1000 * 60 * 60 * 24)
-        );
-
-        return {
-          party,
-          lastInvoice,
-          creditPeriod: `${creditPeriod} days`,
-          dueDate: due.toISOString().split("T")[0],
-          daysLeft,
-        };
-      });
-
-      setPartyData(result);
     });
   }, []);
 
-  // Color code rows
   const getStatusColor = (days) => {
     if (days > 0) return "text-green-600 font-semibold";
     if (days === 0) return "text-yellow-600 font-semibold";
     return "text-red-600 font-semibold";
   };
 
-  // Search Filter
-  const filteredData = partyData.filter((item) =>
+  // ✅ Apply search filter first
+  const searchedData = partyData.filter((item) =>
     item.party.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Sorting
+  // ✅ Apply overdue filter
+  const filteredData = searchedData.filter((item) => {
+    if (filter === "overdue") {
+      return typeof item.daysLeft === "number" && item.daysLeft < 0;
+    }
+    return true;
+  });
+
   const sortedData = [...filteredData].sort((a, b) => {
     if (!sortConfig.key) return 0;
 
@@ -156,7 +163,6 @@ export default function DueDateScreen() {
 
   return (
     <div className="flex flex-col max-w-7xl mx-auto mt-10 h-screen bg-background p-1 sm:p-4 space-y-4">
-      {/* Header */}
       <header className="flex items-center justify-between py-2 border-b">
         <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
           <ArrowLeft className="h-4 w-4" />
@@ -164,14 +170,13 @@ export default function DueDateScreen() {
 
         <div className="flex-1 text-center">
           <h1 className="text-lg sm:text-xl font-semibold">Due Dates</h1>
-          <p className="text-xs text-muted-foreground">SR Enterprise</p>
         </div>
 
-        <div className="w-10" /> {/* empty to balance layout */}
+        <div className="w-10" />
       </header>
 
-      {/* Search */}
-      <div className="flex justify-end">
+      {/* Search + Filter */}
+      <div className="flex flex-col sm:flex-row justify-between gap-3">
         <input
           type="text"
           placeholder="Search party..."
@@ -179,9 +184,25 @@ export default function DueDateScreen() {
           onChange={(e) => setSearchQuery(e.target.value)}
           className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full sm:w-1/3"
         />
+
+        <div className="flex gap-2">
+          <Button
+            variant={filter === "all" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setFilter("all")}
+          >
+            All
+          </Button>
+          <Button
+            variant={filter === "overdue" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setFilter("overdue")}
+          >
+            Overdue
+          </Button>
+        </div>
       </div>
 
-      {/* Table */}
       <main className="flex-1 overflow-y-auto">
         <Card>
           <CardHeader>
@@ -189,7 +210,11 @@ export default function DueDateScreen() {
           </CardHeader>
 
           <CardContent>
-            {sortedData.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Loading...
+              </div>
+            ) : sortedData.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No due data found.
               </div>

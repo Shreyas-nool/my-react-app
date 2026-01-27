@@ -111,6 +111,14 @@ export default function AddPayment() {
     if (type === "bank") return banks;
     if (type === "account") return accounts;
     return [];
+
+    if (
+      fromType === toType &&
+      fromEntity.parentKey === toEntity.parentKey
+    ) {
+      alert("From and To cannot be the same");
+      return;
+    }
   };
 
   const renderDropdown = (
