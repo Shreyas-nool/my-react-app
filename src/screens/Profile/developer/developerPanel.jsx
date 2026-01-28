@@ -6,6 +6,7 @@ import {
   Database,
   ShieldCheck,
   Activity,
+  ScanLine,
 } from "lucide-react";
 
 const DeveloperPanel = () => {

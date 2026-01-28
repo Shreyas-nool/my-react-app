@@ -21,6 +21,8 @@ import { db } from "../../firebase";
 import { ref, set, runTransaction, onValue } from "firebase/database";
 import { cn } from "../../lib/utils";
 import { toast } from "react-toastify";
+import { useRef } from "react";
+
 
 // Format ISO with date & time
 const formatToISO = (dateObj) => {
@@ -57,6 +59,8 @@ const SalesInvoice = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const invoiceToEdit = location.state;
+
+  const boxInputRef = useRef(null);
 
   // Stocks, Parties, Warehouses
   const [stocks, setStocks] = useState([]);
@@ -195,6 +199,12 @@ const SalesInvoice = () => {
     setPricePerItem(Number(stock.pricePerPiece) || 0);
     setProductOpen(false);
     setStockWarning("");
+
+    // ✅ Focus the Box input
+    setTimeout(() => {
+    boxInputRef.current?.focus();
+    boxInputRef.current?.select(); // optional: select existing value
+    }, 0);
   };
 
   const handleAddItem = () => {
@@ -802,7 +812,12 @@ const mergeItems = (oldItems = [], newItems = []) => {
         {/* BOX */}
         <div className="flex flex-col gap-1 w-full">
           <label className="text-sm font-medium">Box</label>
-          <Input type="number" value={box} onChange={(e) => setBox(e.target.value)} />
+          <Input 
+            type="number" 
+            value={box} 
+            onChange={(e) => setBox(e.target.value)} 
+            ref={boxInputRef}
+          />
           {stockWarning && <p className="text-red-500 text-xs mt-1">{stockWarning}</p>}
         </div>
 

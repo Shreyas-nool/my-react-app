@@ -36,12 +36,16 @@ function scanSales(sales, parties, warehouses, progressCb) {
   let scanned = 0;
 
   dateEntries.forEach(([dateKey, invoices]) => {
+    // Detect legacy keys (with time)
+    const isLegacyKey = /\d{4}-\d{2}-\d{2}T/.test(dateKey);
+
     if (!DATEKEY_REGEX.test(dateKey)) {
       issues.push({
         severity: "warning",
         type: "DATEKEY_FORMAT",
         path: `sales/${dateKey}`,
         message: "Date key should be YYYY-MM-DD",
+        hidden: isLegacyKey, // hide legacy warnings by default
       });
     }
 
@@ -52,6 +56,7 @@ function scanSales(sales, parties, warehouses, progressCb) {
       progressCb(scanned, totalInvoices);
 
       const path = `sales/${dateKey}/${invKey}`;
+      const keyDate = dateKey.split("T")[0]; // normalize for legacy
 
       /* Required fields */
       [
@@ -69,18 +74,20 @@ function scanSales(sales, parties, warehouses, progressCb) {
             type: "MISSING_KEY",
             path: `${path}/${k}`,
             message: `Missing required field '${k}'`,
+            hidden: false,
           });
         }
       });
 
       /* createdAt vs dateKey */
-      if (isISODate(inv.createdAt)) {
-        if (getDateOnly(inv.createdAt) !== dateKey) {
+      if (inv.createdAt && new Date(inv.createdAt).toString() !== "Invalid Date") {
+        if (inv.createdAt.split("T")[0] !== keyDate) {
           issues.push({
             severity: "error",
             type: "DATE_MISMATCH",
             path,
             message: "createdAt date does not match dateKey",
+            hidden: isLegacyKey, // hide legacy mismatch
           });
         }
       }
@@ -92,6 +99,7 @@ function scanSales(sales, parties, warehouses, progressCb) {
           type: "INVALID_INVOICE_KEY",
           path,
           message: "Invoice key must be invoice-<number>",
+          hidden: false,
         });
       }
 
@@ -101,6 +109,7 @@ function scanSales(sales, parties, warehouses, progressCb) {
           type: "INVOICE_KEY_MISMATCH",
           path,
           message: "invoiceNumber does not match key",
+          hidden: false,
         });
       }
 
@@ -111,6 +120,7 @@ function scanSales(sales, parties, warehouses, progressCb) {
           type: "DUPLICATE_INVOICE_SAME_DATE",
           path,
           message: "Duplicate invoice number on same date",
+          hidden: false,
         });
       }
       seenPerDate.add(inv.invoiceNumber);
@@ -123,6 +133,7 @@ function scanSales(sales, parties, warehouses, progressCb) {
           message: `Invoice number reused (also at ${invoiceNumbers.get(
             inv.invoiceNumber
           )})`,
+          hidden: false,
         });
       } else {
         invoiceNumbers.set(inv.invoiceNumber, path);
@@ -135,6 +146,7 @@ function scanSales(sales, parties, warehouses, progressCb) {
           type: "INVALID_PARTY",
           path: `${path}/partyId`,
           message: "partyId not found",
+          hidden: false,
         });
       }
 
@@ -144,21 +156,20 @@ function scanSales(sales, parties, warehouses, progressCb) {
           type: "INVALID_WAREHOUSE",
           path: `${path}/warehouseId`,
           message: "warehouseId not found",
+          hidden: false,
         });
       }
 
       /* Subtotal check */
       if (Array.isArray(inv.items)) {
-        const sum = inv.items.reduce(
-          (s, i) => s + Number(i.total || 0),
-          0
-        );
+        const sum = inv.items.reduce((s, i) => s + Number(i.total || 0), 0);
         if (Math.round(sum * 100) !== Math.round(inv.subtotal * 100)) {
           issues.push({
             severity: "warning",
             type: "SUBTOTAL_MISMATCH",
             path,
             message: `Items sum ${sum} ≠ subtotal ${inv.subtotal}`,
+            hidden: false,
           });
         }
       }
@@ -169,6 +180,7 @@ function scanSales(sales, parties, warehouses, progressCb) {
           type: "TOTAL_MISMATCH",
           path,
           message: "total ≠ subtotal",
+          hidden: false,
         });
       }
     });
@@ -188,6 +200,7 @@ export default function DbInspector() {
   const [severity, setSeverity] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [showLegacy, setShowLegacy] = useState(false); // NEW toggle
 
   useEffect(() => {
     const partiesRef = ref(db, "parties");
@@ -225,18 +238,17 @@ export default function DbInspector() {
   /* Filtered */
   const filtered = useMemo(() => {
     return issues.filter((i) => {
+      if (!showLegacy && i.hidden) return false; // hide legacy issues if toggle OFF
       if (severity !== "all" && i.severity !== severity) return false;
       if (typeFilter !== "all" && i.type !== typeFilter) return false;
       if (
         search &&
-        !`${i.message} ${i.path}`
-          .toLowerCase()
-          .includes(search.toLowerCase())
+        !`${i.message} ${i.path}`.toLowerCase().includes(search.toLowerCase())
       )
         return false;
       return true;
     });
-  }, [issues, severity, typeFilter, search]);
+  }, [issues, severity, typeFilter, search, showLegacy]);
 
   return (
     <div className="p-6 bg-slate-50 min-h-screen">
@@ -256,7 +268,7 @@ export default function DbInspector() {
 
         {/* Filters */}
         <div className="bg-white p-4 rounded shadow space-y-3">
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap items-center">
             {["all", "error", "warning"].map((s) => (
               <Button
                 key={s}
@@ -267,6 +279,23 @@ export default function DbInspector() {
                 {s.toUpperCase()}
               </Button>
             ))}
+
+            {/* LEGACY TOGGLE */}
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-sm font-medium">Show Legacy</span>
+              <button
+                className={`w-10 h-5 flex items-center rounded-full p-1 transition-colors duration-200 ${
+                  showLegacy ? "bg-green-500" : "bg-gray-300"
+                }`}
+                onClick={() => setShowLegacy(!showLegacy)}
+              >
+                <div
+                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                    showLegacy ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
           </div>
 
           <div className="flex gap-2 flex-wrap">

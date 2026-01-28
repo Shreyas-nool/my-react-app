@@ -17,12 +17,16 @@ export default function Ledger() {
   });
 
   // ---------- PAGINATION ----------
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(() => {
+    const savedPage = sessionStorage.getItem("ledgerPage");
+    return savedPage ? Number(savedPage) : 1;
+    });
+
   const rowsPerPage = 15;
 
   useEffect(() => {
-    setCurrentPage(1); // Reset page on search change
-  }, [searchQuery]);
+    sessionStorage.setItem("ledgerPage", currentPage);
+  }, [currentPage]);
 
   /* ---------- Fetch Parties ---------- */
   useEffect(() => {
