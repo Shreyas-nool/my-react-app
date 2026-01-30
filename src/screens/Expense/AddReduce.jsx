@@ -140,12 +140,6 @@ export default function AddExpense() {
       const data = snap.val();
       const currentBalance = Number(data.balance || 0);
 
-      // 2️⃣ Validate balance
-      if (currentBalance < expenseAmount) {
-        alert("❌ Insufficient balance");
-        return;
-      }
-
       const updatedBalance = currentBalance - expenseAmount;
 
       // 3️⃣ Update balance SAFELY

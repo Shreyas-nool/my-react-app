@@ -82,12 +82,20 @@ const PartyLedgerScreen = () => {
                     )
                   );
 
+                  const categories = Array.from(
+                    new Set(
+                      (inv.items || [])
+                        .map((i) => i.category)
+                        .filter(Boolean)
+                    )
+                  ).join(", ");
+
                   transactions.push({
                     type: "Sale",
                     date: inv.createdAt,
                     invoice: inv.invoiceNumber,
                     source: "-",
-                    notes: "-",
+                    notes: categories || "-", 
                     amount: total,
                   });
                 });
