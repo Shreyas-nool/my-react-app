@@ -61,6 +61,8 @@ const SalesInvoice = () => {
   const invoiceToEdit = location.state;
 
   const boxInputRef = useRef(null);
+  const priceInputRef = useRef(null);
+  const addButtonRef = useRef(null);
 
   // Stocks, Parties, Warehouses
   const [stocks, setStocks] = useState([]);
@@ -817,6 +819,13 @@ const mergeItems = (oldItems = [], newItems = []) => {
             value={box} 
             onChange={(e) => setBox(e.target.value)} 
             ref={boxInputRef}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                priceInputRef.current?.focus();
+                priceInputRef.current?.select();
+              }
+            }}
           />
           {stockWarning && <p className="text-red-500 text-xs mt-1">{stockWarning}</p>}
         </div>
@@ -830,7 +839,19 @@ const mergeItems = (oldItems = [], newItems = []) => {
         {/* PRICE PER ITEM */}
         <div className="flex flex-col gap-1 w-full">
           <label className="text-sm font-medium">Price/Item</label>
-          <Input type="number" step="0.01" value={pricePerItem} onChange={(e) => setPricePerItem(e.target.value)} />
+          <Input 
+            type="number" 
+            step="0.01" 
+            value={pricePerItem} 
+            onChange={(e) => setPricePerItem(e.target.value)} 
+            ref={priceInputRef}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleAddItem(); // 🔥 auto-submit
+              }
+            }}
+          />
         </div>
       </div>
 
