@@ -93,6 +93,27 @@ const SalesInvoice = () => {
   const [pricePerItem, setPricePerItem] = useState("");
   const [items, setItems] = useState([]);
   const [subtotal, setSubtotal] = useState(0);
+
+  const [extraCharges, setExtraCharges] = useState(0);   // flat
+  const [discountPercent, setDiscountPercent] = useState(0); // %
+  const [flatDiscount, setFlatDiscount] = useState(0);   // flat
+  const [roundOff, setRoundOff] = useState(0);
+
+  const discountAmount = round2(
+    (Number(subtotal) * Number(discountPercent || 0)) / 100
+  );
+
+  const totalAfterDiscounts = round2(
+    subtotal - discountAmount - Number(flatDiscount || 0)
+  );
+
+  const totalAfterCharges = round2(
+    totalAfterDiscounts + Number(extraCharges || 0)
+  );
+
+  // auto round-off to nearest rupee
+  const roundedTotal = Math.round(totalAfterCharges);
+  const calculatedRoundOff = round2(roundedTotal - totalAfterCharges);
   
   const [createdAt, setCreatedAt] = useState(() => {
     const saved = localStorage.getItem("lastSalesDate");
@@ -911,6 +932,60 @@ const mergeItems = (oldItems = [], newItems = []) => {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="max-w-md ml-auto mt-6 space-y-3 border rounded-lg p-4 bg-slate-50">
+        <div className="flex justify-between text-sm">
+          <span>Subtotal</span>
+          <span>{formatPrice(subtotal)}</span>
+        </div>
+
+        {/* Extra Charges */}
+        <div className="flex items-center justify-between gap-3">
+          <label className="text-sm">Additional Charges</label>
+          <Input
+            type="number"
+            className="w-32"
+            value={extraCharges}
+            onChange={(e) => setExtraCharges(e.target.value)}
+          />
+        </div>
+
+        {/* Discount % */}
+        <div className="flex items-center justify-between gap-3">
+          <label className="text-sm">Discount (%)</label>
+          <Input
+            type="number"
+            className="w-32"
+            value={discountPercent}
+            onChange={(e) => setDiscountPercent(e.target.value)}
+          />
+        </div>
+
+        {/* Flat Discount */}
+        <div className="flex items-center justify-between gap-3">
+          <label className="text-sm">Flat Discount</label>
+          <Input
+            type="number"
+            className="w-32"
+            value={flatDiscount}
+            onChange={(e) => setFlatDiscount(e.target.value)}
+          />
+        </div>
+
+        <hr />
+
+        {/* Round Off */}
+        <div className="flex justify-between text-sm">
+          <span>Round Off</span>
+          <span>{formatPrice(calculatedRoundOff)}</span>
+        </div>
+
+        {/* Final Total */}
+        <div className="flex justify-between text-lg font-semibold">
+          <span>Grand Total</span>
+          <span>{formatPrice(roundedTotal)}</span>
+        </div>
       </div>
 
       <div className="flex justify-end mt-4">
